@@ -1,1 +1,1 @@
-# krupp-diet-app
+# Krupp Diet App
