@@ -14,10 +14,9 @@ The function returns a Python dict parsed from the JSON produced by the LLM.
 
 from typing import Dict, Any
 import json
-from langchain import LLMChain
+from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from langchain.llms import LlamaCpp  # easy to swap
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from initial_meal_generation_prompt import INITIAL_MEAL_GENERATION_PROMPT
 from langchain_core.output_parsers.json import JsonOutputParser
 
