@@ -11,20 +11,29 @@ The caller passes:
     }
 The function returns a Python dict parsed from the JSON produced by the LLM.
 """
+
 from typing import Dict, Any
 import json
 from langchain import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain.llms import LlamaCpp  # easy to swap
+from langchain.chat_models import ChatOpenAI
 from initial_meal_generation_prompt import INITIAL_MEAL_GENERATION_PROMPT
+from langchain_core.output_parsers.json import JsonOutputParser
 
+GENAI_STUDIO_API_KEY = "sk-e7245ee0e151441f90bf24714fca6905" # Don't share for obvious reasons
 
-def get_llm(model_path: str = "llama-7b.gguf", temperature: float = 0.7):
-    """Return a LangChain-compatible Llama model (swap here to change LLM)."""
-    return LlamaCpp(
-        model_path=model_path,
+def get_llm(
+    api_key: str = GENAI_STUDIO_API_KEY,
+    base_url: str = "https://genai.rcac.purdue.edu/api",
+    model_name: str = "llama3.1:latest",
+    temperature: float = 0.7
+    ):
+    return ChatOpenAI(
+        api_key=api_key,
+        base_url=f"{base_url}",
+        model_name=model_name,
         temperature=temperature,
-        n_ctx=4096,
     )
 
 
@@ -35,12 +44,15 @@ _PROMPT = PromptTemplate(
 
 
 def generate_initial_meals(user_profile: Dict[str, Any]) -> Dict[str, Any]:
-    chain = LLMChain(llm=get_llm(), prompt=_PROMPT)
-    raw_json = chain.run(user_profile).strip()
-    try:
-        return json.loads(raw_json)
-    except json.JSONDecodeError as exc:  # surface a helpful error
-        raise ValueError(f"LLM returned invalid JSON:\n{raw_json}") from exc
+    parser = JsonOutputParser()
+    chain = LLMChain(llm=get_llm(), 
+                     prompt=_PROMPT,
+                     output_parser = parser,
+                     verbose = True # For testing
+                    )
+    
+    return chain.invoke(user_profile)["text"]
+
 
 
 # ── quick CLI test ──────────────────────────────────────────────────────────────
@@ -48,4 +60,7 @@ if __name__ == "__main__":
     demo = dict(height="175 cm", weight="70 kg",
                 goals="maintain energy for marathon training",
                 dietary_rules="vegetarian, gluten-free")
-    print(generate_initial_meals(demo))
+    
+    json_meals = generate_initial_meals(demo)
+    print(json.dumps(json_meals, indent = 4))
+    print(json_meals.keys())

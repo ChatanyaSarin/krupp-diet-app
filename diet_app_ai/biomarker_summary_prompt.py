@@ -30,5 +30,5 @@ Write ≤150 words summarizing plausible relationships between recurring
 ingredients/nutrients and the user’s biomarkers.  Use hedging language
 ("may", "could") rather than strong causal claims.  No citations yet.
 
-Return ONLY the new summary text.
+Return ONLY the output text. DO NOT include any other text.
 """
