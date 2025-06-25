@@ -159,7 +159,9 @@ class _BiomarkerInputScreenState extends State<BiomarkerInputScreen> {
 
   @override
   void dispose() {
-    for (final c in _controllers) c.dispose();
+    for (final c in _controllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
