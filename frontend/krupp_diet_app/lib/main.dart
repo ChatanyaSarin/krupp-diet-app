@@ -74,20 +74,39 @@ class _SetupScreenState extends State<SetupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Input the following to get started', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                'Input the following to get started',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 24),
               _heightInputs(),
               const SizedBox(height: 16),
-              _labelledField(label: 'Weight:', controller: _weightCtrl, hint: 'e.g. 150', suffix: 'lbs', isNumber: true),
+              _labelledField(
+                label: 'Weight:',
+                controller: _weightCtrl,
+                hint: 'e.g. 150',
+                suffix: 'lbs',
+                isNumber: true,
+              ),
               const SizedBox(height: 16),
-              _labelledField(label: 'Goals:', controller: _goalsCtrl, hint: 'bulk, cut, more energy'),
+              _labelledField(
+                label: 'Goals:',
+                controller: _goalsCtrl,
+                hint: 'bulk, cut, more energy',
+              ),
               const SizedBox(height: 16),
-              _labelledField(label: 'Dietary Restrictions:', controller: _restrictionsCtrl, hint: 'vegetarian, gluten-free'),
+              _labelledField(
+                label: 'Dietary Restrictions:',
+                controller: _restrictionsCtrl,
+                hint: 'vegetarian, gluten-free',
+              ),
               const SizedBox(height: 32),
-              Row(children: [
-                const Spacer(),
-                ElevatedButton(onPressed: _submit, child: const Text('Next')),
-              ])
+              Row(
+                children: [
+                  const Spacer(),
+                  ElevatedButton(onPressed: _submit, child: const Text('Next')),
+                ],
+              ),
             ],
           ),
         ),
@@ -101,17 +120,35 @@ class _SetupScreenState extends State<SetupScreen> {
       children: [
         Text('Height:', style: Theme.of(context).textTheme.bodyLarge),
         const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: _numberField(controller: _feetCtrl, hint: 'ft', suffix: 'ft')),
-          const SizedBox(width: 12),
-          Expanded(child: _numberField(controller: _inchesCtrl, hint: 'in', suffix: 'in')),
-        ]),
+        Row(
+          children: [
+            Expanded(
+              child: _numberField(
+                controller: _feetCtrl,
+                hint: 'ft',
+                suffix: 'ft',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _numberField(
+                controller: _inchesCtrl,
+                hint: 'in',
+                suffix: 'in',
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
 
   /* --------------------------- helper widgets --------------------------- */
-  Widget _numberField({required TextEditingController controller, String? hint, String? suffix}) {
+  Widget _numberField({
+    required TextEditingController controller,
+    String? hint,
+    String? suffix,
+  }) {
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
@@ -149,7 +186,9 @@ class _SetupScreenState extends State<SetupScreen> {
             border: const OutlineInputBorder(),
           ),
           keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-          inputFormatters: isNumber ? [FilteringTextInputFormatter.digitsOnly] : null,
+          inputFormatters: isNumber
+              ? [FilteringTextInputFormatter.digitsOnly]
+              : null,
           validator: (v) {
             if (v == null || v.isEmpty) return 'Required';
             if (isNumber && int.tryParse(v) == null) return 'Enter a number';
@@ -172,7 +211,8 @@ class InitialSuggestionsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final meals = List.generate(10, (i) => 'Meal ${i + 1}');
     final double cardWidth =
-        (MediaQuery.of(context).size.width - 16 * 3) / 2; // two-column gutter calc
+        (MediaQuery.of(context).size.width - 16 * 3) /
+        2; // two-column gutter calc
 
     return Scaffold(
       appBar: AppBar(title: const Text('Initial Suggested Meals')),
@@ -195,7 +235,8 @@ class InitialSuggestionsScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.arrow_forward),
         label: const Text('Next'),
-        onPressed: () => Navigator.pushNamed(context, BiomarkerInputScreen.route),
+        onPressed: () =>
+            Navigator.pushNamed(context, BiomarkerInputScreen.route),
       ),
     );
   }
@@ -216,13 +257,15 @@ class _BiomarkerInputScreenState extends State<BiomarkerInputScreen> {
   final _ctrls = List.generate(4, (_) => TextEditingController());
 
   bool _validateRange() => _ctrls.every((c) {
-        final v = int.tryParse(c.text);
-        return v != null && v >= 0 && v <= 10;
-      });
+    final v = int.tryParse(c.text);
+    return v != null && v >= 0 && v <= 10;
+  });
 
   void _continue() {
     if (!_validateRange()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Each biomarker must be an integer 0–10')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Each biomarker must be an integer 0–10')),
+      );
       return;
     }
     Navigator.pushNamed(context, DailySuggestionsScreen.route);
@@ -230,7 +273,9 @@ class _BiomarkerInputScreenState extends State<BiomarkerInputScreen> {
 
   @override
   void dispose() {
-    for (final c in _ctrls) c.dispose();
+    for (final c in _ctrls) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -244,11 +289,17 @@ class _BiomarkerInputScreenState extends State<BiomarkerInputScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (int i = 0; i < 4; i++) ...[
-              Text('Biomarker ${i + 1}:', style: Theme.of(context).textTheme.bodyLarge),
+              Text(
+                'Biomarker ${i + 1}:',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _ctrls[i],
-                decoration: const InputDecoration(hintText: '0-10', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  hintText: '0-10',
+                  border: OutlineInputBorder(),
+                ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -258,10 +309,12 @@ class _BiomarkerInputScreenState extends State<BiomarkerInputScreen> {
               const SizedBox(height: 16),
             ],
             const Spacer(),
-            Row(children: [
-              const Spacer(),
-              ElevatedButton(onPressed: _continue, child: const Text('Next')),
-            ])
+            Row(
+              children: [
+                const Spacer(),
+                ElevatedButton(onPressed: _continue, child: const Text('Next')),
+              ],
+            ),
           ],
         ),
       ),
@@ -283,13 +336,21 @@ class DailySuggestionsScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Daily Suggested Meals'),
-          bottom: const TabBar(tabs: [Tab(text: 'Breakfast'), Tab(text: 'Lunch'), Tab(text: 'Dinner')]),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Breakfast'),
+              Tab(text: 'Lunch'),
+              Tab(text: 'Dinner'),
+            ],
+          ),
         ),
-        body: const TabBarView(children: [
-          MealList(mealType: 'Breakfast'),
-          MealList(mealType: 'Lunch'),          
-          MealList(mealType: 'Dinner'),
-        ]),
+        body: const TabBarView(
+          children: [
+            MealList(mealType: 'Breakfast'),
+            MealList(mealType: 'Lunch'),
+            MealList(mealType: 'Dinner'),
+          ],
+        ),
       ),
     );
   }
@@ -317,7 +378,7 @@ class _MealCardState extends State<MealCard> {
     final stepSentences = rand.nextInt(3) + 1;
 
     String lorem(int words) =>
-        List.generate(words, (_) => 'lorem').join(' ') + '.';
+        '${List.generate(words, (_) => 'lorem').join(' ')}.';
 
     return Card(
       elevation: 3,
@@ -329,20 +390,29 @@ class _MealCardState extends State<MealCard> {
           children: [
             Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
             const Divider(),
-            const Text('Ingredients:',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Ingredients:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             ...List.generate(
-                ingredientCount,
-                (i) => Text('• ${lorem(rand.nextInt(3) + 2)}',
-                    maxLines: 1, overflow: TextOverflow.ellipsis)),
+              ingredientCount,
+              (i) => Text(
+                '• ${lorem(rand.nextInt(3) + 2)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             const SizedBox(height: 8),
             const Text('Steps:', style: TextStyle(fontWeight: FontWeight.bold)),
             Text(List.generate(stepSentences, (_) => lorem(8)).join(' ')),
             const SizedBox(height: 8),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-              _fbBtn('Like', true, Colors.green),
-              _fbBtn('Dislike', false, Colors.red),
-            ]),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _fbBtn('Like', true, Colors.green),
+                _fbBtn('Dislike', false, Colors.red),
+              ],
+            ),
           ],
         ),
       ),
