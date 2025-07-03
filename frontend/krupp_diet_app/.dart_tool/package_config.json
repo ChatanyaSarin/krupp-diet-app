@@ -51,15 +51,27 @@
     },
     {
       "name": "flutter_lints",
-      "rootUri": "file:///C:/Users/chata/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_lints-5.0.0",
+      "rootUri": "file:///C:/Users/chata/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_lints-6.0.0",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.8"
     },
     {
       "name": "flutter_test",
       "rootUri": "file:///C:/Users/chata/flutter/packages/flutter_test",
       "packageUri": "lib/",
       "languageVersion": "3.7"
+    },
+    {
+      "name": "http",
+      "rootUri": "file:///C:/Users/chata/AppData/Local/Pub/Cache/hosted/pub.dev/http-1.4.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
+      "name": "http_parser",
+      "rootUri": "file:///C:/Users/chata/AppData/Local/Pub/Cache/hosted/pub.dev/http_parser-4.1.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
     },
     {
       "name": "leak_tracker",
@@ -81,9 +93,9 @@
     },
     {
       "name": "lints",
-      "rootUri": "file:///C:/Users/chata/AppData/Local/Pub/Cache/hosted/pub.dev/lints-5.1.1",
+      "rootUri": "file:///C:/Users/chata/AppData/Local/Pub/Cache/hosted/pub.dev/lints-6.0.0",
       "packageUri": "lib/",
-      "languageVersion": "3.6"
+      "languageVersion": "3.8"
     },
     {
       "name": "matcher",
@@ -152,6 +164,12 @@
       "languageVersion": "3.5"
     },
     {
+      "name": "typed_data",
+      "rootUri": "file:///C:/Users/chata/AppData/Local/Pub/Cache/hosted/pub.dev/typed_data-1.4.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
+    },
+    {
       "name": "vector_math",
       "rootUri": "file:///C:/Users/chata/AppData/Local/Pub/Cache/hosted/pub.dev/vector_math-2.1.4",
       "packageUri": "lib/",
@@ -162,6 +180,12 @@
       "rootUri": "file:///C:/Users/chata/AppData/Local/Pub/Cache/hosted/pub.dev/vm_service-15.0.0",
       "packageUri": "lib/",
       "languageVersion": "3.3"
+    },
+    {
+      "name": "web",
+      "rootUri": "file:///C:/Users/chata/AppData/Local/Pub/Cache/hosted/pub.dev/web-1.1.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
     },
     {
       "name": "krupp_diet_app",
