@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/api.dart';
 
+String currentUsername = 'demo_user';
+
 void main() => runApp(const DietApp());
 
 class DietApp extends StatelessWidget {
@@ -39,9 +41,11 @@ class SetupScreen extends StatefulWidget {
   State<SetupScreen> createState() => _SetupScreenState();
 }
 
+final _usernameCtrl = TextEditingController();
+
 class _SetupScreenState extends State<SetupScreen> {
   final _formKey = GlobalKey<FormState>();
-
+  final _usernameCtrl = TextEditingController();
   final _feetCtrl = TextEditingController();
   final _inchesCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
@@ -50,6 +54,7 @@ class _SetupScreenState extends State<SetupScreen> {
 
   @override
   void dispose() {
+    _usernameCtrl.dispose();  
     _feetCtrl.dispose();
     _inchesCtrl.dispose();
     _weightCtrl.dispose();
@@ -58,11 +63,21 @@ class _SetupScreenState extends State<SetupScreen> {
     super.dispose();
   }
 
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
-      Navigator.pushNamed(context, InitialSuggestionsScreen.route);
-    }
+  void _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    currentUsername = _usernameCtrl.text.trim();
+    await ApiService.setupUser(
+      username: currentUsername,
+      heightInches: int.parse(_feetCtrl.text) * 12 + int.parse(_inchesCtrl.text),
+      weight: int.parse(_weightCtrl.text),
+      goals: _goalsCtrl.text,
+      restrictions: _restrictionsCtrl.text,
+    );
+
+    Navigator.pushNamed(context, InitialSuggestionsScreen.route);
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -75,11 +90,10 @@ class _SetupScreenState extends State<SetupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Input the following to get started',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              const Text('Input the following to get started', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 24),
+              _labelledField(label: 'Username:', controller: _usernameCtrl, hint: 'e.g. alice'), // NEW
+              const SizedBox(height: 16),
               _heightInputs(),
               const SizedBox(height: 16),
               _labelledField(
@@ -204,40 +218,46 @@ class _SetupScreenState extends State<SetupScreen> {
 /* -------------------------------------------------------------------------- */
 /*                    INITIAL MEAL SUGGESTIONS  (10 cards)                    */
 /* -------------------------------------------------------------------------- */
-class InitialSuggestionsScreen extends StatelessWidget {
+class InitialSuggestionsScreen extends StatefulWidget {
   const InitialSuggestionsScreen({super.key});
   static const route = '/initial-suggestions';
 
   @override
-  Widget build(BuildContext context) {
-    final meals = List.generate(10, (i) => 'Meal ${i + 1}');
-    final double cardWidth =
-        (MediaQuery.of(context).size.width - 16 * 3) /
-        2; // two-column gutter calc
+  State<InitialSuggestionsScreen> createState() => _InitialSuggestionsScreenState();
+}
 
+class _InitialSuggestionsScreenState extends State<InitialSuggestionsScreen> {
+  late Future<Map<String, dynamic>> _mealsFut;
+
+  @override
+  void initState() {
+    super.initState();
+    _mealsFut = ApiService.fetchInitialMeals(currentUsername);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Initial Suggested Meals')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          children: meals
-              .map(
-                (m) => SizedBox(
-                  width: cardWidth,
-                  // IntrinsicHeight forces each card in the row to adopt the tallest height
-                  child: IntrinsicHeight(child: MealCard(title: m)),
-                ),
-              )
-              .toList(),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.arrow_forward),
-        label: const Text('Next'),
-        onPressed: () =>
-            Navigator.pushNamed(context, BiomarkerInputScreen.route),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _mealsFut,
+        builder: (ctx, snap) {
+          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          final meals = snap.data!;
+          final keys = meals.keys.toList();
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: GridView.builder(
+              itemCount: keys.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2, crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: .8),
+              itemBuilder: (_, idx) => MealCard(
+                title: meals[keys[idx]]['long_name'],
+                mealCode: keys[idx],   // pass down so MealCard can call likeMeal()
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -262,13 +282,19 @@ class _BiomarkerInputScreenState extends State<BiomarkerInputScreen> {
     return v != null && v >= 0 && v <= 10;
   });
 
-  void _continue() {
+  void _continue() async {
     if (!_validateRange()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Each biomarker must be an integer 0–10')),
       );
       return;
     }
+    await ApiService.sendBiomarkers(
+      username: currentUsername,
+      b1: int.parse(_ctrls[0].text),
+      b2: int.parse(_ctrls[1].text),
+      b3: int.parse(_ctrls[2].text),
+    );
     Navigator.pushNamed(context, DailySuggestionsScreen.route);
   }
 
@@ -326,32 +352,65 @@ class _BiomarkerInputScreenState extends State<BiomarkerInputScreen> {
 /* -------------------------------------------------------------------------- */
 /*                 DAILY MEAL SUGGESTIONS (5 per meal type)                   */
 /* -------------------------------------------------------------------------- */
-class DailySuggestionsScreen extends StatelessWidget {
+class DailySuggestionsScreen extends StatefulWidget {
   const DailySuggestionsScreen({super.key});
   static const route = '/daily-suggestions';
 
   @override
+  State<DailySuggestionsScreen> createState() => _DailySuggestionsScreenState();
+}
+
+class _DailySuggestionsScreenState extends State<DailySuggestionsScreen> {
+  late Future<Map<String, dynamic>> _futureDaily;
+
+  @override
+  void initState() {
+    super.initState();
+    _futureDaily = ApiService.fetchDailyMeals(currentUsername);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Daily Suggested Meals'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Breakfast'),
-              Tab(text: 'Lunch'),
-              Tab(text: 'Dinner'),
-            ],
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _futureDaily,
+      builder: (ctx, snap) {
+        if (!snap.hasData) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        final daily = snap.data!;
+        return DefaultTabController(
+          length: 3,
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text('Daily Suggested Meals'),
+              bottom: const TabBar(
+                tabs: [
+                  Tab(text: 'Breakfast'),
+                  Tab(text: 'Lunch'),
+                  Tab(text: 'Dinner'),
+                ],
+              ),
+            ),
+            body: TabBarView(children: [
+              _buildMealList('breakfast', daily['breakfast']),
+              _buildMealList('lunch', daily['lunch']),
+              _buildMealList('dinner', daily['dinner']),
+            ]),
           ),
-        ),
-        body: const TabBarView(
-          children: [
-            MealList(mealType: 'Breakfast'),
-            MealList(mealType: 'Lunch'),
-            MealList(mealType: 'Dinner'),
-          ],
-        ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMealList(String type, Map<String, dynamic> meals) {
+    final slugs = meals.keys.toList();
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: slugs.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (_, i) => MealCard(
+        title: meals[slugs[i]]['long_name'],
+        mealCode: slugs[i],
       ),
     );
   }
@@ -361,8 +420,13 @@ class DailySuggestionsScreen extends StatelessWidget {
 /*                             MEAL CARD WIDGET                               */
 /* -------------------------------------------------------------------------- */
 class MealCard extends StatefulWidget {
-  const MealCard({super.key, required this.title});
+  const MealCard({
+    super.key,
+    required this.title,
+    required this.mealCode,   // ← NEW
+  });
   final String title;
+  final String mealCode;      // ← NEW
 
   @override
   State<MealCard> createState() => _MealCardState();
@@ -373,13 +437,8 @@ class _MealCardState extends State<MealCard> {
 
   @override
   Widget build(BuildContext context) {
-    // random lorem sizes for dynamic height preview
     final rand = Random();
-    final ingredientCount = rand.nextInt(4) + 2;
-    final stepSentences = rand.nextInt(3) + 1;
-
-    String lorem(int words) =>
-        '${List.generate(words, (_) => 'lorem').join(' ')}.';
+    String lorem(int w) => List.filled(w, 'lorem').join(' ') + '.';
 
     return Card(
       elevation: 3,
@@ -391,21 +450,11 @@ class _MealCardState extends State<MealCard> {
           children: [
             Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
             const Divider(),
-            const Text(
-              'Ingredients:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            ...List.generate(
-              ingredientCount,
-              (i) => Text(
-                '• ${lorem(rand.nextInt(3) + 2)}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            const Text('Ingredients:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('• ' + lorem(6)),
             const SizedBox(height: 8),
             const Text('Steps:', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text(List.generate(stepSentences, (_) => lorem(8)).join(' ')),
+            Text(lorem(18)),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -428,11 +477,25 @@ class _MealCardState extends State<MealCard> {
         foregroundColor: selected ? Colors.white : Colors.black,
         minimumSize: const Size(72, 36),
       ),
-      onPressed: () => setState(() => liked = value),
+      onPressed: () async {
+        setState(() => liked = value);
+        try {
+          await ApiService.likeMeal(
+            username: currentUsername,
+            mealCode: widget.mealCode,
+            like: value,
+          );
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed: $e')),
+          );
+        }
+      },
       child: Text(label),
     );
   }
 }
+
 
 /* -------------------------------------------------------------------------- */
 /*                             MEAL LIST WIDGET                               */
@@ -448,7 +511,8 @@ class MealList extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       itemCount: meals.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, idx) => MealCard(title: meals[idx]),
+      itemBuilder: (_, idx) => MealCard(title: meals[idx], mealCode: meals[idx]),
     );
   }
 }
+

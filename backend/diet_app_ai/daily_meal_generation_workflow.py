@@ -7,8 +7,8 @@ import json
 from langchain import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain.llms import LlamaCpp
-from daily_meal_generation_prompt import DAILY_MEAL_GENERATION_PROMPT
-from initial_meal_generation_workflow import get_llm  # reuse helper
+from diet_app_ai.daily_meal_generation_prompt import DAILY_MEAL_GENERATION_PROMPT
+from diet_app_ai.initial_meal_generation_workflow import get_llm  # reuse helper
 from langchain_core.output_parsers.json import JsonOutputParser
 
 _PROMPT = PromptTemplate(

@@ -1,11 +1,10 @@
 import datetime as dt
+from typing import Any
 from flask import Blueprint, request, jsonify
 
-from models import (
-    UserPreferences, UserMealPreference, UserBiomarker,
-    MealIngredientRow, MealStepRow, UserSummarization
-)
-from sheets_client import batch_get
+from models import UserPreferences, UserMealPreference, UserBiomarker, MealIngredientRow, MealStepRow, UserSummarization
+
+from sheets_client import batch_get, append_rows
 
 # ——— import LangChain workflows ———
 from diet_app_ai.initial_meal_generation_workflow import generate_initial_meals
@@ -38,28 +37,35 @@ def meals_initial():
 
     meals = generate_initial_meals(
         dict(
-            user_height=height,
-            user_weight=weight,
+            height=height,
+            weight=weight,
             dietary_restrictions=restrictions.split(","),
             goals=goals.split(",")
         )
     )
 
     # flatten ingredients & steps into rows
+    rows_ing: list[list[Any]] = []
+    rows_steps: list[list[Any]] = []
+
     for slug, meta in meals.items():
         for ing, amt in meta["ingredients"].items():
-            MealIngredientRow(
-                Date=TODAY(), Username=username, MealType="Initial",
-                MealCode=slug, Ingredient=ing, Amount=amt,
-                Model="llama", Temperature=0.7
-            ).save()
+            rows_ing.append([
+                TODAY(), username, "Initial", slug,  # Date, Username, MealType, MealCode
+                ing, amt, "llama", 0.7               # Ingredient, Amount, Model, Temp
+            ])
         for i, step in enumerate(meta["instructions"].split("."), 1):
-            if step.strip():
-                MealStepRow(
-                    Date=TODAY(), Username=username, MealType="Initial",
-                    MealCode=slug, Step=i, Instruction=step.strip(),
-                    Model="llama", Temperature=0.7
-                ).save()
+            s = step.strip()
+            if s:
+                rows_steps.append([
+                    TODAY(), username, "Initial", slug,
+                    i, s, "llama", 0.7
+                ])
+
+    # ONE write request per table:
+    append_rows("MealIngredients", rows_ing)
+    append_rows("MealSteps", rows_steps)
+
 
     return meals, 200
 
@@ -106,21 +112,27 @@ def meals_daily():
     )
 
     # persist
-    for meal_type, suggestions in meals.items():
-        for slug, meta in suggestions.items():
-            for ing, amt in meta["ingredients"].items():
-                MealIngredientRow(
-                    Date=TODAY(), Username=username, MealType=meal_type,
-                    MealCode=slug, Ingredient=ing, Amount=amt,
-                    Model="llama", Temperature=0.7
-                ).save()
-            for i, step in enumerate(meta["instructions"].split("."), 1):
-                if step.strip():
-                    MealStepRow(
-                        Date=TODAY(), Username=username, MealType=meal_type,
-                        MealCode=slug, Step=i, Instruction=step.strip(),
-                        Model="llama", Temperature=0.7
-                    ).save()
+    rows_ing: list[list[Any]] = []
+    rows_steps: list[list[Any]] = []
+
+    for slug, meta in meals.items():
+        for ing, amt in meta["ingredients"].items():
+            rows_ing.append([
+                TODAY(), username, "Initial", slug,  # Date, Username, MealType, MealCode
+                ing, amt, "llama", 0.7               # Ingredient, Amount, Model, Temp
+            ])
+        for i, step in enumerate(meta["instructions"].split("."), 1):
+            s = step.strip()
+            if s:
+                rows_steps.append([
+                    TODAY(), username, "Initial", slug,
+                    i, s, "llama", 0.7
+                ])
+
+    # ONE write request per table:
+    append_rows("MealIngredients", rows_ing)
+    append_rows("MealSteps", rows_steps)
+
 
     return meals, 200
 

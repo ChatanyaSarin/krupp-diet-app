@@ -23,7 +23,7 @@ USER PROFILE
 ︙ Height: {height}
 ︙ Weight: {weight}
 ︙ Goals : {goals}
-︙ Dietary restrictions: {dietary_rules}
+︙ Dietary restrictions: {dietary_restrictions}
 
 TASK
 1. Produce exactly **10** distinct meal ideas suitable for one serving each.

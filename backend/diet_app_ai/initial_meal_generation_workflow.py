@@ -17,10 +17,10 @@ import json
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_community.chat_models import ChatOpenAI
-from initial_meal_generation_prompt import INITIAL_MEAL_GENERATION_PROMPT
+from diet_app_ai.initial_meal_generation_prompt import INITIAL_MEAL_GENERATION_PROMPT
 from langchain_core.output_parsers.json import JsonOutputParser
 
-GENAI_STUDIO_API_KEY = "sk-e7245ee0e151441f90bf24714fca6905" # Don't share for obvious reasons
+GENAI_STUDIO_API_KEY = "sk-e7245ee0e151441f90bf24714fca6905" # Don't share
 
 def get_llm(
     api_key: str = GENAI_STUDIO_API_KEY,
@@ -44,12 +44,12 @@ _PROMPT = PromptTemplate(
 
 def generate_initial_meals(user_profile: Dict[str, Any]) -> Dict[str, Any]:
     parser = JsonOutputParser()
+    print(user_profile)  # Debugging: print the formatted prompt
     chain = LLMChain(llm=get_llm(), 
                      prompt=_PROMPT,
                      output_parser = parser,
                      verbose = True # For testing
                     )
-    
     return chain.invoke(user_profile)["text"]
 
 

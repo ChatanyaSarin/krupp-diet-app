@@ -9,7 +9,7 @@ SPREADSHEET_ID = "16XTW3RelaEbkubvk7OXP8_EcKx05Pmd8LdHEM5Gs-Cc"
 
 # ---------- AUTH ----------
 creds = Credentials.from_service_account_file(
-    "credentials.json", scopes=SCOPES
+    "backend/credentials.json", scopes=SCOPES
 )
 service = build("sheets", "v4", credentials=creds)
 sheet_api = service.spreadsheets()
@@ -22,6 +22,15 @@ def append_row(tab: str, values: List[Any]) -> None:
         range=f"{tab}!A1",
         valueInputOption="USER_ENTERED",
         body={"values": [values]},
+    ).execute()
+
+def append_rows(tab: str, rows: List[List[Any]]) -> None:
+    """Append many rows in ONE request."""
+    sheet_api.values().append(
+        spreadsheetId=SPREADSHEET_ID,
+        range=f"{tab}!A1",
+        valueInputOption="USER_ENTERED",
+        body={"values": rows},
     ).execute()
 
 
