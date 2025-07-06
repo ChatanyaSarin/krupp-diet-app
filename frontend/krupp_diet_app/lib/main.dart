@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/api.dart';
@@ -40,8 +39,6 @@ class SetupScreen extends StatefulWidget {
   @override
   State<SetupScreen> createState() => _SetupScreenState();
 }
-
-final _usernameCtrl = TextEditingController();
 
 class _SetupScreenState extends State<SetupScreen> {
   final _formKey = GlobalKey<FormState>();
@@ -437,7 +434,6 @@ class _MealCardState extends State<MealCard> {
 
   @override
   Widget build(BuildContext context) {
-    final rand = Random();
     String lorem(int w) => List.filled(w, 'lorem').join(' ') + '.';
 
     return Card(

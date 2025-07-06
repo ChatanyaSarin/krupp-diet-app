@@ -31,7 +31,7 @@ def get_llm(
     return ChatOpenAI(
         api_key=api_key,
         base_url=f"{base_url}",
-        model_name=model_name,
+        model=model_name,
         temperature=temperature,
     )
 
