@@ -106,8 +106,8 @@ def meals_daily():
     meals = generate_daily_meals(
         dict(
             biomarker_feedback=biom_summary,
-            user_preferences=pref_summary,
-            regenerate_meals=None
+            taste_summary=pref_summary,
+            user_goals=goals
         )
     )
 
