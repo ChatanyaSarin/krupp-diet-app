@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/api.dart';
+import 'screens/login_screen.dart';
+import 'screens/status_gate.dart';
+
 
 String currentUsername = 'demo_user';
 
@@ -18,13 +21,16 @@ class DietApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF008060),
         useMaterial3: true,
       ),
-      initialRoute: SetupScreen.route,
+      initialRoute: LoginScreen.route,
       routes: {
+        LoginScreen.route: (_) => const LoginScreen(),
+        StatusGate.route: (_) => const StatusGate(),
         SetupScreen.route: (_) => const SetupScreen(),
         InitialSuggestionsScreen.route: (_) => const InitialSuggestionsScreen(),
         BiomarkerInputScreen.route: (_) => const BiomarkerInputScreen(),
         DailySuggestionsScreen.route: (_) => const DailySuggestionsScreen(),
       },
+
     );
   }
 }
@@ -234,6 +240,7 @@ class _InitialSuggestionsScreenState extends State<InitialSuggestionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // inside _InitialSuggestionsScreenState.build
     return Scaffold(
       appBar: AppBar(title: const Text('Initial Suggested Meals')),
       body: FutureBuilder<Map<String, dynamic>>(
@@ -241,22 +248,107 @@ class _InitialSuggestionsScreenState extends State<InitialSuggestionsScreen> {
         builder: (ctx, snap) {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           final meals = snap.data!;
-          final keys = meals.keys.toList();
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: GridView.builder(
-              itemCount: keys.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: .8),
-              itemBuilder: (_, idx) => MealCard(
-                title: meals[keys[idx]]['long_name'],
-                mealCode: keys[idx],   // pass down so MealCard can call likeMeal()
-              ),
-            ),
-          );
+          final slugs = meals.keys.toList();
+          // null = unmarked (assume dislike on submit), true = like, false = dislike
+          final Map<String, bool?> choices = { for (var s in slugs) s: null };
+
+          return StatefulBuilder(builder: (ctx, setSB) {
+            int likesCount = choices.values.where((v) => v == true).length;
+
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    'Pick the meals you LIKE (at least one). Unmarked ones will be saved as dislikes.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: GridView.builder(
+                      itemCount: slugs.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2, crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: .8),
+                      itemBuilder: (_, i) {
+                        final slug = slugs[i];
+                        final liked = choices[slug];
+                        return Card(
+                          elevation: 3,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(meals[slug]['long_name'],
+                                    style: Theme.of(context).textTheme.titleMedium),
+                                const Spacer(),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: () => setSB(() => choices[slug] = true),
+                                        style: OutlinedButton.styleFrom(
+                                          backgroundColor: liked == true ? Colors.green : null,
+                                          foregroundColor: liked == true ? Colors.white : Colors.black,
+                                        ),
+                                        child: const Text('Like'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: () => setSB(() => choices[slug] = false),
+                                        style: OutlinedButton.styleFrom(
+                                          backgroundColor: liked == false ? Colors.red : null,
+                                          foregroundColor: liked == false ? Colors.white : Colors.black,
+                                        ),
+                                        child: const Text('Dislike'),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: likesCount == 0 ? null : () async {
+                          // Post feedback for ALL 10 (likes and implied dislikes)
+                          for (final slug in slugs) {
+                            final like = choices[slug] == true ? true : false;
+                            await ApiService.likeMeal(
+                              username: currentUsername,
+                              mealCode: slug,
+                              like: like,
+                              initial: true,            // ← INITIAL
+                            );
+                          }
+                          if (!mounted) return;
+                          Navigator.pushReplacementNamed(context, BiomarkerInputScreen.route);
+                        },
+                        child: Text('Submit (${likesCount} liked)'),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          });
         },
       ),
     );
+
   }
 }
 
@@ -359,6 +451,7 @@ class DailySuggestionsScreen extends StatefulWidget {
 
 class _DailySuggestionsScreenState extends State<DailySuggestionsScreen> {
   late Future<Map<String, dynamic>> _futureDaily;
+  final Map<String, String?> _picked = {'breakfast': null, 'lunch': null, 'dinner': null};
 
   @override
   void initState() {
@@ -366,52 +459,79 @@ class _DailySuggestionsScreenState extends State<DailySuggestionsScreen> {
     _futureDaily = ApiService.fetchDailyMeals(currentUsername);
   }
 
+  bool get _ready => _picked.values.every((v) => v != null);
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>>(
       future: _futureDaily,
       builder: (ctx, snap) {
-        if (!snap.hasData) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
+        if (!snap.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
         final daily = snap.data!;
         return DefaultTabController(
           length: 3,
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Daily Suggested Meals'),
-              bottom: const TabBar(
-                tabs: [
-                  Tab(text: 'Breakfast'),
-                  Tab(text: 'Lunch'),
-                  Tab(text: 'Dinner'),
-                ],
-              ),
+              title: const Text('Pick today’s meals'),
+              bottom: const TabBar(tabs: [Tab(text: 'Breakfast'), Tab(text: 'Lunch'), Tab(text: 'Dinner')]),
             ),
             body: TabBarView(children: [
-              _buildMealList('breakfast', daily['breakfast']),
-              _buildMealList('lunch', daily['lunch']),
-              _buildMealList('dinner', daily['dinner']),
+              _mealList('breakfast', daily['breakfast']),
+              _mealList('lunch', daily['lunch']),
+              _mealList('dinner', daily['dinner']),
             ]),
+            bottomNavigationBar: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: FilledButton(
+                  onPressed: _ready ? () async {
+                    // record 3 likes (others left implicit)
+                    for (final type in ['breakfast','lunch','dinner']) {
+                      final slug = _picked[type]!;
+                      await ApiService.likeMeal(
+                        username: currentUsername,
+                        mealCode: slug,
+                        like: true,
+                        initial: false,
+                      );
+                    }
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved for today!')));
+                    Navigator.pop(context); // go back, or route wherever you want
+                  } : null,
+                  child: const Text('Save today’s picks'),
+                ),
+              ),
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildMealList(String type, Map<String, dynamic> meals) {
+  Widget _mealList(String type, Map<String, dynamic> meals) {
     final slugs = meals.keys.toList();
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: slugs.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, i) => MealCard(
-        title: meals[slugs[i]]['long_name'],
-        mealCode: slugs[i],
-      ),
+      itemBuilder: (_, i) {
+        final slug = slugs[i];
+        final selected = _picked[type] == slug;
+        return ListTile(
+          title: Text(meals[slug]['long_name']),
+          trailing: selected ? const Icon(Icons.check_circle) : null,
+          onTap: () => setState(() => _picked[type] = slug),
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: selected ? Colors.green : Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(12),
+          ),
+        );
+      },
     );
   }
 }
+
 
 /* -------------------------------------------------------------------------- */
 /*                             MEAL CARD WIDGET                               */
@@ -480,6 +600,7 @@ class _MealCardState extends State<MealCard> {
             username: currentUsername,
             mealCode: widget.mealCode,
             like: value,
+            initial: false, // ← NOT INITIAL
           );
         } catch (e) {
           ScaffoldMessenger.of(context).showSnackBar(

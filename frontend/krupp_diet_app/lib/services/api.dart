@@ -5,32 +5,55 @@ import 'package:http/http.dart' as http;
 const String _baseUrl = 'http://localhost:8000';
 
 class ApiService {
-  /*--------------------------- USER SET-UP ---------------------------*/
+  // ---------- AUTH ----------
+  static Future<Map<String, dynamic>> login({
+    required String username,
+    required String password,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/auth/login');
+    final res = await http.post(uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}));
+    if (res.statusCode == 200) return jsonDecode(res.body);
+    if (res.statusCode == 409) {
+      // server can return 409 to mean "user exists but no password set yet"
+      return {'needsPassword': true};
+    }
+    throw Exception('Login failed: ${res.statusCode} ${res.body}');
+  }
+
+  static Future<void> setPassword({
+    required String username,
+    required String password,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/auth/register');
+    final res = await http.post(uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}));
+    if (res.statusCode != 201) {
+      throw Exception('Set password failed: ${res.statusCode} ${res.body}');
+    }
+  }
+
+  // ---------- STATUS ----------
+  static Future<Map<String, dynamic>> getUserStatus(String username) async {
+    final uri = Uri.parse('$_baseUrl/user/status?username=$username');
+    final res = await http.get(uri);
+    if (res.statusCode != 200) {
+      throw Exception('Status failed: ${res.statusCode} ${res.body}');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // ---------- EXISTING METHODS (keep yours) ----------
   static Future<void> setupUser({
     required String username,
     required int heightInches,
     required int weight,
     required String goals,
     required String restrictions,
-  }) async {
-    final uri = Uri.parse('$_baseUrl/setup_user');
-    final res = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'Username': username,
-        'Height': heightInches,
-        'Weight': weight,
-        'Goals': goals,
-        'DietaryRestrictions': restrictions,
-      }),
-    );
-    if (res.statusCode != 201) {
-      throw Exception('setup_user failed: ${res.body}');
-    }
-  }
+  }) async { /* unchanged */ }
 
-  /*---------------------- INITIAL MEAL GENERATION --------------------*/
   static Future<Map<String, dynamic>> fetchInitialMeals(String username) async {
     final uri = Uri.parse('$_baseUrl/meals/initial');
     final res = await http.post(uri,
@@ -42,28 +65,13 @@ class ApiService {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  /*------------------------- BIOMARKER WRITE -------------------------*/
   static Future<void> sendBiomarkers({
     required String username,
     required int b1,
     required int b2,
     required int b3,
-  }) async {
-    final uri = Uri.parse('$_baseUrl/biomarkers');
-    final res = await http.post(uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'Username': username,
-          'BIOMARKER 1': b1,
-          'BIOMARKER 2': b2,
-          'BIOMARKER 3': b3,
-        }));
-    if (res.statusCode != 201) {
-      throw Exception('biomarkers failed: ${res.body}');
-    }
-  }
+  }) async { /* unchanged */ }
 
-  /*------------------------- DAILY MEALS -----------------------------*/
   static Future<Map<String, dynamic>> fetchDailyMeals(String username) async {
     final uri = Uri.parse('$_baseUrl/meals/daily');
     final res = await http.post(uri,
@@ -75,19 +83,24 @@ class ApiService {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  /*------------------- LIKE / DISLIKE FEEDBACK -----------------------*/
+  // Add initial flag
   static Future<void> likeMeal({
     required String username,
     required String mealCode,
     required bool like,
+    required bool initial,         // NEW
   }) async {
     final uri = Uri.parse('$_baseUrl/meals/feedback');
-    await http.post(uri,
+    final res = await http.post(uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'Username': username,
           'MealCode': mealCode,
           'Like': like,
+          'Initial': initial,      // server writes this into UserMealPreferences.Initial
         }));
+    if (res.statusCode != 201) {
+      throw Exception('feedback failed: ${res.statusCode} ${res.body}');
+    }
   }
 }
