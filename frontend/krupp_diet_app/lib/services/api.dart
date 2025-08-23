@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 /// Flip this when you deploy (Android emulator ⇒ 10.0.2.2)
-const String _baseUrl = 'http://localhost:8000';
+const String _host = '127.0.0.1';
+const int _port = 8000;
+Uri _u(String path) => Uri(scheme: 'http', host: _host, port: _port, path: path);
 
 class ApiService {
   // ---------- AUTH ----------
@@ -10,8 +12,7 @@ class ApiService {
     required String username,
     required String password,
   }) async {
-    final uri = Uri.parse('$_baseUrl/auth/login');
-    final res = await http.post(uri,
+    final res = await http.post(_u('/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'username': username, 'password': password}));
     if (res.statusCode == 200) return jsonDecode(res.body);
@@ -26,8 +27,7 @@ class ApiService {
     required String username,
     required String password,
   }) async {
-    final uri = Uri.parse('$_baseUrl/auth/register');
-    final res = await http.post(uri,
+    final res = await http.post(_u('/auth/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'username': username, 'password': password}));
     if (res.statusCode != 201) {
@@ -37,8 +37,7 @@ class ApiService {
 
   // ---------- STATUS ----------
   static Future<Map<String, dynamic>> getUserStatus(String username) async {
-    final uri = Uri.parse('$_baseUrl/user/status?username=$username');
-    final res = await http.get(uri);
+    final res = await http.get(_u('user/status?username=$username'));
     if (res.statusCode != 200) {
       throw Exception('Status failed: ${res.statusCode} ${res.body}');
     }
@@ -46,17 +45,33 @@ class ApiService {
   }
 
   // ---------- EXISTING METHODS (keep yours) ----------
-  static Future<void> setupUser({
+  
+  
+static Future<void> setupUser({
     required String username,
     required int heightInches,
     required int weight,
     required String goals,
     required String restrictions,
-  }) async { /* unchanged */ }
+  }) async { 
+    final res = await http.post(
+    _u('/setup_user'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({
+      'Username': username,
+      'Height': heightInches,
+      'Weight': weight,
+      'Goals': goals,
+      'DietaryRestrictions': restrictions,
+    }),
+  );
+  if (res.statusCode != 201) {
+    throw Exception('setup_user failed: ${res.statusCode} ${res.body}');
+  }
+  }
 
   static Future<Map<String, dynamic>> fetchInitialMeals(String username) async {
-    final uri = Uri.parse('$_baseUrl/meals/initial');
-    final res = await http.post(uri,
+    final res = await http.post(_u('/meals/initial'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'Username': username}));
     if (res.statusCode != 200) {
@@ -73,8 +88,7 @@ class ApiService {
   }) async { /* unchanged */ }
 
   static Future<Map<String, dynamic>> fetchDailyMeals(String username) async {
-    final uri = Uri.parse('$_baseUrl/meals/daily');
-    final res = await http.post(uri,
+    final res = await http.post(_u('/meals/daily'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'Username': username}));
     if (res.statusCode != 200) {
@@ -90,8 +104,7 @@ class ApiService {
     required bool like,
     required bool initial,         // NEW
   }) async {
-    final uri = Uri.parse('$_baseUrl/meals/feedback');
-    final res = await http.post(uri,
+    final res = await http.post(_u('/meals/feedback'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'Username': username,

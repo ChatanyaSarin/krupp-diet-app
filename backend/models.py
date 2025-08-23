@@ -1,10 +1,27 @@
-from dataclasses import dataclass
+# backend/models.py
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 import datetime as dt
-from typing import List
+from typing import Any, List
 
-from sheets_client import append_row, upsert_by_key
+from sheets_client import (
+    append_row,
+    update_row,
+    find_row_by_header_value,
+)
 
-# ---------- USER PREFERENCES ----------
+# ----------------------- helpers -----------------------
+
+def now_ts() -> str:
+    return dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def b2s(b: bool) -> str:
+    return "TRUE" if bool(b) else "FALSE"
+
+
+# -------------------- USER PREFERENCES --------------------
+
 @dataclass
 class UserPreferences:
     Username: str
@@ -12,8 +29,9 @@ class UserPreferences:
     Weight: int
     Goals: str
     DietaryRestrictions: str
-    CreatedAt: str = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    CreatedAt: str = field(default_factory=now_ts)
 
+    # MUST match header row in the 'UserPreferences' tab
     HEADER = [
         "Username",
         "Height",
@@ -23,37 +41,68 @@ class UserPreferences:
         "CreatedAt",
     ]
 
-    def save(self):
-        upsert_by_key(
-            "UserPreferences", self.HEADER, 0, self.Username, self.to_row()
-        )
-
-    def to_row(self):
+    def to_row(self) -> List[Any]:
         return [
             self.Username,
-            self.Height,
-            self.Weight,
+            int(self.Height),
+            int(self.Weight),
             self.Goals,
             self.DietaryRestrictions,
             self.CreatedAt,
         ]
 
+    def save(self) -> None:
+        """
+        Upsert by Username:
+        - If Username exists in UserPreferences, update that row (preserve CreatedAt if already set).
+        - Otherwise append a new row.
+        """
+        row_idx, row, header = find_row_by_header_value("UserPreferences", "Username", self.Username)
 
-# ---------- MEAL FEEDBACK ----------
+        # ensure row aligns to header length
+        values = self.to_row()
+        if row_idx is None:
+            append_row("UserPreferences", values)
+            return
+
+        # preserve existing CreatedAt if present
+        try:
+            ca_i = header.index("CreatedAt")
+            if len(row) > ca_i and row[ca_i]:
+                values[ca_i] = row[ca_i]
+        except ValueError:
+            pass
+
+        update_row("UserPreferences", row_idx, values)
+
+
+# ---------------------- MEAL FEEDBACK ----------------------
+
 @dataclass
 class UserMealPreference:
     Date: str
     Username: str
     MealCode: str
     Like: bool
+    Initial: bool  # NEW: TRUE if initial suggestion; FALSE if daily
 
-    HEADER = ["Date", "Username", "MealCode", "Like"]
+    # MUST match header row in 'UserMealPreferences'
+    HEADER = ["Date", "Username", "MealCode", "Like", "Initial"]
 
-    def save(self):
+    def to_row(self) -> List[Any]:
+        return [
+            self.Date,
+            self.Username,
+            self.MealCode,
+            b2s(self.Like),
+            b2s(self.Initial),
+        ]
+
+    def save(self) -> None:
         append_row("UserMealPreferences", self.to_row())
 
-    def to_row(self):
-        return [self.Date, self.Username, self.MealCode, str(self.Like).upper()]
+
+# ---------------------- USER BIOMARKER ----------------------
 
 @dataclass
 class UserBiomarker:
@@ -63,15 +112,23 @@ class UserBiomarker:
     Biomarker2: int
     Biomarker3: int
 
+    # MUST match header row in 'UserBiomarker'
     HEADER = ["Date", "Username", "BIOMARKER 1", "BIOMARKER 2", "BIOMARKER 3"]
 
-    def save(self):
+    def to_row(self) -> List[Any]:
+        return [
+            self.Date,
+            self.Username,
+            int(self.Biomarker1),
+            int(self.Biomarker2),
+            int(self.Biomarker3),
+        ]
+
+    def save(self) -> None:
         append_row("UserBiomarker", self.to_row())
 
-    def to_row(self):
-        return [self.Date, self.Username, self.Biomarker1,
-                self.Biomarker2, self.Biomarker3]
 
+# ---------------------- MEAL INGREDIENTS ----------------------
 
 @dataclass
 class MealIngredientRow:
@@ -80,20 +137,43 @@ class MealIngredientRow:
     MealType: str       # Breakfast | Lunch | Dinner | Initial
     MealCode: str
     Ingredient: str
-    Amount: str
+    Amount: str         # keep as string (e.g., "1 cup", "200 g")
     Model: str
     Temperature: float
 
-    HEADER = ["Date", "Username", "MealType", "MealCode",
-              "Ingredients", "Amount", "Model", "Temperature"]
+    # MUST match header row in 'MealIngredients'
+    HEADER = [
+        "Date",
+        "Username",
+        "MealType",
+        "MealCode",
+        "Ingredients",
+        "Amount",
+        "Model",
+        "Temperature",
+    ]
 
-    def save(self):
+    def to_row(self) -> List[Any]:
+        return [
+            self.Date,
+            self.Username,
+            self.MealType,
+            self.MealCode,
+            self.ingredient_cell(),
+            self.Amount,
+            self.Model,
+            self.Temperature,
+        ]
+
+    def ingredient_cell(self) -> str:
+        # In case you ever normalize naming to singular "Ingredient"
+        return self.Ingredient
+
+    def save(self) -> None:
         append_row("MealIngredients", self.to_row())
 
-    def to_row(self):
-        return [self.Date, self.Username, self.MealType, self.MealCode,
-                self.Ingredient, self.Amount, self.Model, self.Temperature]
 
+# ------------------------- MEAL STEPS -------------------------
 
 @dataclass
 class MealStepRow:
@@ -106,16 +186,35 @@ class MealStepRow:
     Model: str
     Temperature: float
 
-    HEADER = ["Date", "Username", "MealType", "MealCode",
-              "Step", "Instruction", "Model", "Temperature"]
+    # MUST match header row in 'MealSteps'
+    HEADER = [
+        "Date",
+        "Username",
+        "MealType",
+        "MealCode",
+        "Step",
+        "Instruction",
+        "Model",
+        "Temperature",
+    ]
 
-    def save(self):
+    def to_row(self) -> List[Any]:
+        return [
+            self.Date,
+            self.Username,
+            self.MealType,
+            self.MealCode,
+            int(self.Step),
+            self.Instruction,
+            self.Model,
+            self.Temperature,
+        ]
+
+    def save(self) -> None:
         append_row("MealSteps", self.to_row())
 
-    def to_row(self):
-        return [self.Date, self.Username, self.MealType, self.MealCode,
-                self.Step, self.Instruction, self.Model, self.Temperature]
 
+# ---------------------- USER SUMMARIZATION ----------------------
 
 @dataclass
 class UserSummarization:
@@ -126,12 +225,25 @@ class UserSummarization:
     Model: str
     Temperature: float
 
-    HEADER = ["Date", "Username", "PreferenceSummary",
-              "BiomarkerSummary", "Model", "Temperature"]
+    # MUST match header row in 'UserSummarization'
+    HEADER = [
+        "Date",
+        "Username",
+        "PreferenceSummary",
+        "BiomarkerSummary",
+        "Model",
+        "Temperature",
+    ]
 
-    def save(self):
+    def to_row(self) -> List[Any]:
+        return [
+            self.Date,
+            self.Username,
+            self.PreferenceSummary,
+            self.BiomarkerSummary,
+            self.Model,
+            self.Temperature,
+        ]
+
+    def save(self) -> None:
         append_row("UserSummarization", self.to_row())
-
-    def to_row(self):
-        return [self.Date, self.Username, self.PreferenceSummary,
-                self.BiomarkerSummary, self.Model, self.Temperature]
