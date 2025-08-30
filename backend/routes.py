@@ -19,163 +19,55 @@ from diet_app_ai.preference_summary_workflow      import update_taste_summary
 bp = Blueprint("api", __name__)
 TODAY = lambda: dt.datetime.now().strftime("%Y-%m-%d")
 
+def _safe_json() -> dict:
+    """
+    Parse JSON from the request body *very* defensively:
+    - try Flask's parser (force=True to ignore mimetype)
+    - fall back to raw body
+    - always return a dict
+    """
+    data = request.get_json(force=True, silent=True)
+    if isinstance(data, dict):
+        return data
+    raw = request.get_data(cache=False, as_text=True) or ""
+    if raw:
+        try:
+            j = json.loads(raw)
+            if isinstance(j, dict):
+                return j
+        except Exception:
+            pass
+    return {}
+
+def _extract_username(data: dict) -> str:
+    # Try body first
+    for k in ("Username", "username", "user", "name"):
+        v = data.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    # Then querystring as a backup
+    v = request.args.get("Username") or request.args.get("username") or ""
+    return v.strip()
+
 # ---------- Summaries: collect + run ----------
 
 from collections import defaultdict
 
-def _parse_date(s: str) -> dt.date | None:
-    try:
-        return dt.datetime.strptime(s, "%Y-%m-%d").date()
-    except Exception:
-        return None
-
-def _collect_recent_biomarkers(username: str, window_days: int = 7) -> list[dict[str, int | str]]:
-    rows = get_values("UserBiomarker")
-    if not rows:
-        return []
-    hdr = rows[0]
-    try:
-        d_i = hdr.index("Date"); u_i = hdr.index("Username")
-        b1_i = hdr.index("BIOMARKER 1"); b2_i = hdr.index("BIOMARKER 2"); b3_i = hdr.index("BIOMARKER 3")
-    except ValueError:
-        return []
-    today = dt.date.today()
-    out = []
-    for r in rows[1:]:
-        if len(r) <= max(d_i, u_i, b1_i, b2_i, b3_i): continue
-        if r[u_i] != username: continue
-        d = _parse_date(r[d_i])
-        if not d or (today - d).days > window_days: continue
-        try:
-            out.append({
-                "date": r[d_i],
-                "b1": int(r[b1_i]),
-                "b2": int(r[b2_i]),
-                "b3": int(r[b3_i]),
-            })
-        except Exception:
-            continue
-    return out
-
-def _collect_recent_meals_json(username: str, window_days: int = 7) -> dict[str, dict]:
-    """Rebuild minimal meal JSON from MealIngredients/MealSteps for the last N days."""
-    # Ingredients
-    ing_rows = get_values("MealIngredients")
-    steps_rows = get_values("MealSteps")
-    today = dt.date.today()
-
-    def _by_meal(rows, is_ing=True):
-        if not rows: return {}
-        hdr = rows[0]
-        idx = {name: (hdr.index(name) if name in hdr else None) for name in
-               (["Date","Username","MealType","MealCode","Ingredients","Amount"] if is_ing
-                else ["Date","Username","MealType","MealCode","Step","Instruction"])}
-        m = defaultdict(lambda: {"long_name": "", "ingredients": {}, "instructions": []})
-        for r in rows[1:]:
-            if any(idx[k] is None or len(r) <= idx[k] for k in idx): continue
-            if r[idx["Username"]] != username: continue
-            d = _parse_date(r[idx["Date"]]); 
-            if not d or (today - d).days > window_days: continue
-            code = r[idx["MealCode"]]
-            if is_ing:
-                ing, amt = r[idx["Ingredients"]], str(r[idx["Amount"]])
-                m[code]["ingredients"][ing] = amt
-            else:
-                step_txt = r[idx["Instruction"]].strip()
-                if step_txt:
-                    m[code]["instructions"].append(step_txt)
-        return m
-
-    m_ing = _by_meal(ing_rows, True)
-    m_steps = _by_meal(steps_rows, False)
-
-    # Merge
-    all_codes = set(m_ing.keys()) | set(m_steps.keys())
-    out = {}
-    for code in all_codes:
-        ings = dict(m_ing.get(code, {}).get("ingredients", {}))
-        steps_list = m_steps.get(code, {}).get("instructions", [])
-        out[code] = {
-            "long_name": code.replace("-", " ").title(),
-            "ingredients": ings,
-            "instructions": "\n".join(steps_list),
-        }
-    return out
-
-def _collect_recent_likes(username: str, window_days: int = 7) -> tuple[list[str], list[str]]:
-    rows = get_values("UserMealPreferences")
-    if not rows:
-        return ([], [])
-    hdr = rows[0]
-    try:
-        d_i = hdr.index("Date"); u_i = hdr.index("Username")
-        code_i = hdr.index("MealCode"); like_i = hdr.index("Like")
-    except ValueError:
-        return ([], [])
-    today = dt.date.today()
-    likes, dislikes = [], []
-    for r in rows[1:]:
-        if len(r) <= max(d_i, u_i, code_i, like_i): continue
-        if r[u_i] != username: continue
-        d = _parse_date(r[d_i])
-        if not d or (today - d).days > window_days: continue
-        (likes if (r[like_i].upper() == "TRUE") else dislikes).append(r[code_i])
-    return (likes, dislikes)
-
-@bp.post("/summaries/run")
-def run_summaries():
-    """Compute both summaries and store them in UserSummarization."""
-    data = request.get_json(silent=True) or {}
-    username = (data.get("Username") or "").strip()
-    window_days = int(data.get("window_days", 7))
-    if not username:
-        return {"error": "Username is required"}, 400
-
-    # existing summaries (if any)
-    old_bio, old_taste = _latest_summaries(username)
-
-    # fresh windows
-    biomarker_window = _collect_recent_biomarkers(username, window_days)
-    meals_json = _collect_recent_meals_json(username, window_days)
-    liked, disliked = _collect_recent_likes(username, window_days)
-
-    # LLM calls (robust to empty inputs)
-    try:
-        new_bio = update_biomarker_summary(
-            payload = {
-                existing_summary=old_bio or "",
-                recent_biomarkers=biomarker_window,
-                recent_meals=meals_json,
-            }
-        )
-    except Exception as e:
-        return {"error": f"update_biomarker_summary failed: {e}"}, 500
-
-    try:
-        new_taste = update_taste_summary(
-            data = {
-                "existing_summary": old_taste or "",
-                "liked_meals": liked,
-                "disliked_meals": disliked,
-            }
-        )
-    except Exception as e:
-        return {"error": f"update_taste_summary failed: {e}"}, 500
-
-    # write a single combined row
-    append_row("UserSummarization", [
-        TODAY(), username, new_taste, new_bio, "llama", 0.7
-    ])
-    return {"ok": True}, 201
-
-
-
 # POST /auth/login
-@bp.post("/auth/login")
+@bp.route("/auth/login", methods=["POST"], strict_slashes=False)
 def auth_login():
-    data = request.get_json() or {}
-    username = data.get("username", "").strip()
-    password = data.get("password", "")
+    data = request.get_json(silent=True) or {}
+
+    def as_str(x):
+        if x is None: return ""
+        if isinstance(x, dict) and "value" in x: return str(x["value"])
+        return str(x)
+
+    username = as_str(data.get("username")).strip()
+    password = as_str(data.get("password"))
+
+    if not username:
+        return {"error": "username required"}, 400
 
     row_idx, row, header = find_row_by_header_value("Users", "Username", username)
     if row is None:
@@ -185,14 +77,13 @@ def auth_login():
     pwd_hash = row[ph_i] if len(row) > ph_i else ""
 
     if not pwd_hash:
-        # user exists but has not set a password yet
         return jsonify({"needsPassword": True}), 409
 
     if not bcrypt.check_password_hash(pwd_hash, password):
         return jsonify({"error": "bad credentials"}), 401
 
-    # You can mint a JWT here; keeping it simple for the study
     return jsonify({"ok": True}), 200
+
 
 
 # POST /auth/register  (first-time password set)
@@ -258,8 +149,10 @@ def setup_user():
 # ---------- 2. Initial meal generation ----------
 @bp.post("/meals/initial")
 def meals_initial():
-    req = request.get_json() or {}
-    username = req["Username"].strip()
+    req = _safe_json()
+    username = _extract_username(req)
+    if not username:
+        return {"error": "Username is required"}, 400
 
     # ----- read UserPreferences safely -----
     vals = get_values("UserPreferences")  # [['Username','Height','Weight','Goals','DietaryRestrictions', ...], [..], ...]
@@ -311,24 +204,26 @@ def meals_initial():
     # ----- persist ingredients & steps in batches -----
     rows_ing, rows_steps = [], []
     for slug, meta in meals.items():
+        desc = (meta.get("description") or "").strip()
         for ing, amt in meta["ingredients"].items():
             rows_ing.append([
                 TODAY(), username, "Initial", slug,
-                ing, amt, "llama", 0.7
+                desc, ing, amt, "llama", 0.7  # DESCRIPTION inserted
             ])
-        # split instructions by line OR period; keep non-empty steps
         raw = meta["instructions"].replace("\r", "").split("\n")
-        parts = [p for p in raw if p.strip()] if len(raw) > 1 else [s for s in meta["instructions"].split(".") if s.strip()]
+        parts = [p for p in raw if p.strip()] or [s for s in meta["instructions"].split(".") if s.strip()]
         for i, step in enumerate(parts, 1):
             rows_steps.append([
                 TODAY(), username, "Initial", slug,
                 i, step.strip(), "llama", 0.7
             ])
 
+
     if rows_ing:
         append_rows("MealIngredients", rows_ing)
     if rows_steps:
         append_rows("MealSteps", rows_steps)
+
 
     return meals, 200
 
@@ -413,76 +308,275 @@ def _latest_summaries(username: str) -> tuple[str, str]:
 
 def _user_goals(username: str) -> str:
     vals = get_values("UserPreferences")
-    if not vals:
-        return ""
-    header = vals[0]
+    if not vals: return ""
+    hdr = vals[0]
     try:
-        u_i = header.index("Username")
-        g_i = header.index("Goals")
+        u_i = hdr.index("Username"); g_i = hdr.index("Goals")
     except ValueError:
         return ""
-    row = next((r for r in vals[1:] if len(r) > u_i and r[u_i] == username), None)
-    return (row[g_i] if row and len(row) > g_i else "") or ""
+    row = next((r for r in vals[1:] if len(r)>u_i and r[u_i]==username), None)
+    return (row[g_i] if row and len(row)>g_i else "") or ""
 
 TODAY = lambda: dt.datetime.now().strftime("%Y-%m-%d")
 
 @bp.post("/meals/daily")
 def meals_daily():
-    data = request.get_json(silent=True) or {}
-    username = (data.get("Username") or "").strip()
+    data = _safe_json()
+    username = _extract_username(data)
     if not username:
         return {"error": "Username is required"}, 400
 
-    # ---- Gather context for the LLM (with safe fallbacks) ----
+    # 1) Try to use existing summaries
     biomarker_summary, taste_profile = _latest_summaries(username)
-    goals = _user_goals(username)
 
-    # Even if summaries are empty, pass empty strings so LC has the keys
-    try:
-        meals_json_str = generate_daily_meals(
-            context={
-                "biomarker_summary": biomarker_summary or "",
-                "taste_summary": taste_profile or "",   # <- expected key
-                "user_goals": goals or "",              # <- expected key
-            }
-        )
+    # 2) If either is missing, compute now and write to sheet
+    computed_any = False
+    if not biomarker_summary or not taste_profile:
+        window_days = int(data.get("window_days", 7) or 7)
+        biomarker_window = _collect_recent_biomarkers(username, window_days)
+        meals_json       = _collect_recent_meals_json(username, window_days)
+        liked, disliked  = _collect_recent_likes(username, window_days)
 
-    except Exception as e:
-        # surface prompt/LLM errors clearly during dev
-        return {"error": f"generate_daily_meals failed: {e}"}, 500
+        # Compute biomarker summary if missing
+        if not biomarker_summary:
+            try:
+                biomarker_summary = update_biomarker_summary(payload={
+                    "existing_summary":  "",
+                    "biomarker_journal": json.dumps(biomarker_window or []),
+                    "meals_last_period": json.dumps(meals_json or {}),
+                })
+                if not isinstance(biomarker_summary, str):
+                    biomarker_summary = str(biomarker_summary)
+                computed_any = True
+            except Exception:
+                biomarker_summary = "No recent biomarker data; default to balanced meals, steady energy, and moderate sodium."
 
-    # Parse the JSON the model returns
+        # Compute taste/Preference summary if missing
+        if not taste_profile:
+            try:
+                taste_profile = update_taste_summary(data={
+                    "existing_summary": "",
+                    "liked_meals":     ", ".join(liked) if liked else "",
+                    "disliked_meals":  ", ".join(disliked) if disliked else "",
+                })
+                if not isinstance(taste_profile, str):
+                    taste_profile = str(taste_profile)
+                computed_any = True
+            except Exception:
+                taste_profile = "No strong preferences recorded; include variety, moderate spice, and familiar flavors."
+
+        # If we computed anything, persist a row so future calls are warm
+        if computed_any:
+            append_row("UserSummarization", [TODAY(), username, taste_profile, biomarker_summary, "llama", 0.7])
+
+    # 3) Profile fields
+    goals        = _user_goals(username) or "General health and steady energy."
+    restrictions = _user_restrictions(username) or []
+
+    # 4) Build LLM context with ALL keys your prompt expects
+    payload_context = {
+        "biomarker_summary":    biomarker_summary or "No recent biomarker data.",
+        "taste_profile":        taste_profile or "No strong preferences recorded.",
+        "taste_summary":        taste_profile or "No strong preferences recorded.",
+        "goals":                goals,
+        "user_goals":           goals,
+        "dietary_restrictions": ", ".join(restrictions),
+    }
+
+    # 5) Generate meals
+    meals_json_str = generate_daily_meals(context=payload_context)
     try:
         meals = json.loads(meals_json_str) if isinstance(meals_json_str, str) else meals_json_str
     except Exception as e:
         return {"error": f"Model did not return valid JSON: {e}", "raw": meals_json_str}, 500
 
-    # ---- Persist ingredients & steps for each meal type ----
-    rows_ing: list[list] = []
-    rows_steps: list[list] = []
+    # 6) Persist to MealIngredients & MealSteps (with Description)
+    rows_ing, rows_steps = [], []
     for meal_type in ("breakfast", "lunch", "dinner"):
         section = meals.get(meal_type, {}) or {}
         for slug, meta in section.items():
-            # ingredients: dict item -> amount
+            desc = (meta.get("description") or "").strip()
+            # ingredients
             for ing, amt in (meta.get("ingredients") or {}).items():
                 rows_ing.append([
                     TODAY(), username, meal_type.capitalize(), slug,
-                    ing, str(amt), "llama", 0.7
+                    desc, ing, str(amt), "llama", 0.7
                 ])
-            # steps: split gracefully (newlines preferred, then periods)
+            # steps
             instr = (meta.get("instructions") or "").replace("\r", "")
-            raw_parts = [p.strip() for p in instr.split("\n") if p.strip()]
-            parts = raw_parts if raw_parts else [p.strip() for p in instr.split(".") if p.strip()]
+            parts = [p.strip() for p in instr.split("\n") if p.strip()] or \
+                    [p.strip() for p in instr.split(".") if p.strip()]
             for i, step in enumerate(parts, 1):
                 rows_steps.append([
                     TODAY(), username, meal_type.capitalize(), slug,
                     i, step, "llama", 0.7
                 ])
 
-    if rows_ing:
-        append_rows("MealIngredients", rows_ing)
-    if rows_steps:
-        append_rows("MealSteps", rows_steps)
+    if rows_ing:   append_rows("MealIngredients", rows_ing)
+    if rows_steps: append_rows("MealSteps", rows_steps)
 
-    # Return structured JSON to the frontend
     return jsonify(meals), 200
+
+# ---------- Summaries: collect + run ----------
+
+from collections import defaultdict
+
+def _parse_date(s: str) -> dt.date | None:
+    try:
+        return dt.datetime.strptime(s, "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+def _collect_recent_biomarkers(username: str, window_days: int = 7) -> list[dict[str, int | str]]:
+    rows = get_values("UserBiomarker")
+    if not rows:
+        return []
+    hdr = rows[0]
+    try:
+        d_i = hdr.index("Date"); u_i = hdr.index("Username")
+        b1_i = hdr.index("BIOMARKER 1"); b2_i = hdr.index("BIOMARKER 2"); b3_i = hdr.index("BIOMARKER 3")
+    except ValueError:
+        return []
+    today = dt.date.today()
+    out = []
+    for r in rows[1:]:
+        if len(r) <= max(d_i, u_i, b1_i, b2_i, b3_i): continue
+        if r[u_i] != username: continue
+        d = _parse_date(r[d_i])
+        if not d or (today - d).days > window_days: continue
+        try:
+            out.append({
+                "date": r[d_i],
+                "b1": int(r[b1_i]),
+                "b2": int(r[b2_i]),
+                "b3": int(r[b3_i]),
+            })
+        except Exception:
+            continue
+    return out
+
+def _collect_recent_meals_json(username: str, window_days: int = 7) -> dict[str, dict]:
+    """Rebuild minimal meal JSON from MealIngredients/MealSteps for the last N days."""
+    # Ingredients
+    ing_rows = get_values("MealIngredients")
+    steps_rows = get_values("MealSteps")
+    today = dt.date.today()
+
+    def _by_meal(rows, is_ing=True):
+        if not rows: return {}
+        hdr = rows[0]
+        idx = {name: (hdr.index(name) if name in hdr else None) for name in
+               (["Date","Username","MealType","MealCode","Ingredients","Amount"] if is_ing
+                else ["Date","Username","MealType","MealCode","Step","Instruction"])}
+        m = defaultdict(lambda: {"long_name": "", "ingredients": defaultdict(str), "instructions": []})
+        for r in rows[1:]:
+            if any(idx[k] is None or len(r) <= idx[k] for k in idx): continue
+            if r[idx["Username"]] != username: continue
+            d = _parse_date(r[idx["Date"]]); 
+            if not d or (today - d).days > window_days: continue
+            code = r[idx["MealCode"]]
+            if is_ing:
+                ing, amt = r[idx["Ingredients"]], str(r[idx["Amount"]])
+                if not isinstance(m[code]["ingredients"], dict):
+                    m[code]["ingredients"] = {}
+                m[code]["ingredients"][ing] = amt
+            else:
+                step_txt = r[idx["Instruction"]].strip()
+                if step_txt:
+                    m[code]["instructions"].append(step_txt)
+        return m
+
+    m_ing = _by_meal(ing_rows, True)
+    m_steps = _by_meal(steps_rows, False)
+
+    # Merge
+    all_codes = set(m_ing.keys()) | set(m_steps.keys())
+    out = {}
+    for code in all_codes:
+        ingredients_obj = m_ing.get(code, {}).get("ingredients", {})
+        ings = dict(ingredients_obj) if isinstance(ingredients_obj, (dict, defaultdict)) else {}
+        steps_list = m_steps.get(code, {}).get("instructions", [])
+        out[code] = {
+            "long_name": code.replace("-", " ").title(),
+            "ingredients": ings,
+            "instructions": "\n".join(steps_list),
+        }
+    return out
+
+def _collect_recent_likes(username: str, window_days: int = 7) -> tuple[list[str], list[str]]:
+    rows = get_values("UserMealPreferences")
+    if not rows:
+        return ([], [])
+    hdr = rows[0]
+    try:
+        d_i = hdr.index("Date"); u_i = hdr.index("Username")
+        code_i = hdr.index("MealCode"); like_i = hdr.index("Like")
+    except ValueError:
+        return ([], [])
+    today = dt.date.today()
+    likes, dislikes = [], []
+    for r in rows[1:]:
+        if len(r) <= max(d_i, u_i, code_i, like_i): continue
+        if r[u_i] != username: continue
+        d = _parse_date(r[d_i])
+        if not d or (today - d).days > window_days: continue
+        (likes if (r[like_i].upper() == "TRUE") else dislikes).append(r[code_i])
+    return (likes, dislikes)
+
+@bp.post("/summaries/run")
+def run_summaries():
+    """Compute both summaries and store them in UserSummarization."""
+    data = request.get_json(silent=True) or {}
+    username = (data.get("Username") or data.get("username") or "").strip()
+    window_days = int(data.get("window_days", 7) or 7)
+    if not username:
+        return {"error": "Username is required"}, 400
+
+    # prior summaries (if any)
+    old_bio, old_taste = _latest_summaries(username)
+
+    # fresh windowed data
+    biomarker_window = _collect_recent_biomarkers(username, window_days)  # list[dict]
+    meals_json       = _collect_recent_meals_json(username, window_days)  # dict[code]->obj
+    liked, disliked  = _collect_recent_likes(username, window_days)
+
+    # NOTE: use the arg names your workflow expects
+    try:
+        new_bio = update_biomarker_summary(payload={
+            "existing_summary":   old_bio or "",
+            "biomarker_journal":  json.dumps(biomarker_window or []),
+            "meals_last_period":  json.dumps(meals_json or {}),
+        })
+        if not isinstance(new_bio, str):
+            new_bio = str(new_bio)
+    except Exception as e:
+        return {"error": f"update_biomarker_summary failed: {e}"}, 500
+
+    try:
+        new_taste = update_taste_summary(data={
+            "existing_summary": old_taste or "",
+            "liked_meals":     ", ".join(liked) if liked else "",
+            "disliked_meals":  ", ".join(disliked) if disliked else "",
+        })
+        if not isinstance(new_taste, str):
+            new_taste = str(new_taste)
+    except Exception as e:
+        return {"error": f"update_taste_summary failed: {e}"}, 500
+
+    append_row("UserSummarization", [TODAY(), username, new_taste, new_bio, "llama", 0.7])
+    return {"ok": True}, 201
+
+def _user_restrictions(username: str):
+    vals = get_values("UserPreferences")
+    if not vals:
+        return []
+    header = vals[0]
+    try:
+        u_i = header.index("Username")
+        r_i = header.index("DietaryRestrictions")
+    except ValueError:
+        return []
+    row = next((r for r in vals[1:] if len(r) > u_i and r[u_i] == username), None)
+    raw = (row[r_i] if row and len(row) > r_i else "") or ""
+    # return as list
+    return [s.strip() for s in raw.split(",") if s.strip()]

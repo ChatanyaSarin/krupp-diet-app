@@ -1,41 +1,121 @@
-// diet-web/app/daily/page.tsx
-'use client';
-import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
-import { getUser } from '@/lib/session';
+"use client";
 
-export default function Daily() {
-  const u = getUser()!;
-  const [data, setData] = useState<any>(null);
-  const [picked, setPicked] = useState<Record<'breakfast'|'lunch'|'dinner', string | null>>({breakfast:null,lunch:null,dinner:null});
-  useEffect(()=>{ api.dailyMeals(u).then(setData); },[u]);
-  if (!data) return <div className="p-6">Loading…</div>;
-  const ready = picked.breakfast && picked.lunch && picked.dinner;
-  async function save(){
-    await api.feedback(u, picked.breakfast!, true, false);
-    await api.feedback(u, picked.lunch!, true, false);
-    await api.feedback(u, picked.dinner!, true, false);
-    alert('Saved for today!');
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { api } from "@/lib/api";
+import { readUsername } from "@/lib/user";
+import { DailyMealCard } from "@/components/DailyMealCard";
+
+type Section = "breakfast" | "lunch" | "dinner";
+
+export default function DailyPage() {
+  const router = useRouter();
+  const search = useSearchParams();
+
+  // 1) Mount gate to keep SSR/CSR first render identical
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // 2) Resolve username only after mount (can touch localStorage safely)
+  const [username, setUsername] = useState<string | null>(null);
+  useEffect(() => {
+    if (!mounted) return;
+    setUsername(readUsername(search));
+  }, [mounted, search]);
+
+  // 3) Data + selection state
+  const [data, setData] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [picks, setPicks] = useState<Record<Section, string | undefined>>({
+    breakfast: undefined,
+    lunch: undefined,
+    dinner: undefined,
+  });
+
+  // 4) Redirect only after we actually checked username on the client
+  useEffect(() => {
+    if (!mounted) return;
+    if (username === null) return; // still resolving
+    if (!username) router.replace("/login");
+  }, [mounted, username, router]);
+
+  // 5) Fetch data after username is known (and mounted)
+  useEffect(() => {
+    if (!mounted || !username) return;
+    (async () => {
+      try {
+        // be resilient; even if this fails we still call /meals/daily
+        try { await api.runSummaries(username, 7); } catch {}
+        const d = await api.dailyMeals(username);
+        setData(d);
+      } catch (e: any) {
+        setErr(String(e));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [mounted, username]);
+
+  const allChosen = Boolean(picks.breakfast && picks.lunch && picks.dinner);
+
+  async function submit() {
+    if (!username || !data) return;
+    const tasks: Promise<any>[] = [];
+    (["breakfast", "lunch", "dinner"] as Section[]).forEach((sec) => {
+      const chosen = picks[sec]!;
+      const items = Object.keys(data[sec] ?? {});
+      items.forEach((slug) => {
+        tasks.push(api.feedback(username, slug, slug === chosen, /* initial */ false));
+      });
+    });
+    await Promise.all(tasks);
+    router.push("/gate?done=daily");
   }
-  const Section = ({type}:{type:'breakfast'|'lunch'|'dinner'}) => {
-    const meals = data[type]; const slugs = Object.keys(meals);
-    return (<div><h2 className="font-semibold capitalize mb-2">{type}</h2>
-      <div className="grid md:grid-cols-2 gap-3">
-        {slugs.map(slug=>{
-          const sel = picked[type]===slug;
-          return <button key={slug} onClick={()=>setPicked({...picked,[type]:slug})}
-            className={`text-left border rounded p-3 ${sel?'border-emerald-600 ring-1 ring-emerald-600':''}`}>
-            {meals[slug].long_name}
-          </button>;
-        })}
-      </div></div>);
-  };
-  return (<div className="max-w-5xl mx-auto p-6 space-y-6">
-    <Section type="breakfast" />
-    <Section type="lunch" />
-    <Section type="dinner" />
-    <button disabled={!ready} onClick={save} className="bg-emerald-600 text-white rounded px-4 py-2 disabled:opacity-50">
-      Save today’s picks
-    </button>
-  </div>);
+
+  // ---------- Render (keep first paint stable) ----------
+  if (!mounted) return <div className="p-6" />;             // same on server & client
+  if (username === null) return <div className="p-6" />;    // resolving username
+  if (!username) return <div className="p-6" />;            // redirecting
+  if (loading) return <div className="p-6">Loading…</div>;
+  if (err) return <div className="p-6 text-red-600">{err}</div>;
+  if (!data) return <div className="p-6">No data.</div>;
+
+  const sections: Section[] = ["breakfast", "lunch", "dinner"];
+
+  return (
+    <div className="space-y-10" suppressHydrationWarning>
+      {sections.map((sec) => {
+        const items = data[sec] ?? {};
+        const slugs = Object.keys(items);
+        return (
+          <section key={sec}>
+            <h2 className="text-2xl font-bold capitalize text-uc-navy mb-3">{sec}</h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {slugs.map((slug) => (
+                <DailyMealCard
+                  key={slug}
+                  slug={slug}
+                  title={items[slug].long_name}
+                  description={items[slug].description}
+                  selected={picks[sec] === slug}
+                  onSelect={(s) => setPicks((p) => ({ ...p, [sec]: s }))}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
+      <div className="flex justify-end">
+        <button
+          className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={!allChosen}
+          onClick={submit}
+        >
+          Submit picks
+        </button>
+      </div>
+    </div>
+  );
 }

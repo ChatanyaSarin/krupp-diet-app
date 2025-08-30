@@ -1,50 +1,29 @@
-"""
-Prompt used for the INITIAL MEAL GENERATION step.
+# initial_meal_generation_prompts.py
+INITIAL_MEAL_SYSTEM = """You are a diet planning assistant. Generate 10 diverse, realistic meals as JSON only.
+Each top-level key is a short slug (e.g., "chicken-sandwich").
+For each meal include:
+- long_name: longer descriptive title
+- description: one-sentence appetizing blurb
+- ingredients: object of {{item: amount_string}}
+- instructions: single string with numbered or newline steps
+Return ONLY valid JSON, no markdown fences, no commentary."""
 
-Inputs expected from the calling workflow
------------------------------------------
-{{height}}           – str | int | float   – e.g. "180 cm"
-{{weight}}           – str | int | float   – e.g. "75 kg"
-{{goals}}            – str                 – free-text goal description
-{{dietary_rules}}    – str                 – comma-separated restrictions
+INITIAL_MEAL_USER = """User profile:
+- Height (in): {height}
+- Weight (lb): {weight}
+- Goals (comma-separated): {goals}
+- Dietary restrictions (comma-separated): {dietary_restrictions}
 
-Outputs (JSON)
---------------
-Ten top-level keys (meal slugs).  Each key → {{
-    "long_name"      : str,
-    "ingredients"    : {{<item>: <amount>, ...}},
-    "instructions"   : str
-}}
-"""
-INITIAL_MEAL_GENERATION_PROMPT = """\
-You are a performance-nutrition expert designing meals for a new user.
-
-USER PROFILE
-︙ Height: {height}
-︙ Weight: {weight}
-︙ Goals : {goals}
-︙ Dietary restrictions: {dietary_restrictions}
-
-TASK
-1. Produce exactly **10** distinct meal ideas suitable for one serving each.
-2. Respect every dietary restriction.
-3. Bias choices toward the user’s goals (cut, bulk, extra energy …).
-4. Return **only** valid JSON that follows this schema:
-
+Output format example:
 {{
   "slug1": {{
-    "long_name": "...",
-    "ingredients": {{ "item": "amount", ... }},
-    "instructions": "Step 1. [STEP] Step 2. [STEP]"
+    "long_name": "Grilled Chicken Sandwich with Chimichurri",
+    "description": "A zesty, protein-forward sandwich with bright herbs.",
+    "ingredients": {{ "chicken breast": "1", "roll": "1", "chimichurri": "2 tbsp" }},
+    "instructions": "1) ...\\n2) ..."
   }},
-  …
-  "slug10": {{ … }}
-}}
+  ...
+  "slug10": {{ ... }}
+}}"""
 
-Make the outer keys URL-safe slugs (lowercase, words separated by hyphens). 
-Make the meal instructions CLEAR by including SIGNIFICANT DETAIL and leaving no room for alternate approaches.
-Ensure every ingredient needed in the instructions is listed in the ingredients.  
-Never wrap the JSON in triple back-ticks or any extra text.
-Return ONLY the JSON. Do NOT wrap it in triple back-ticks or add commentary. 
-Do NOT return the user's height, weight, dietary restrictions, or any other information. ONLY return the meals in the above format.
-"""
+INITIAL_MEAL_GENERATION_PROMPT = INITIAL_MEAL_SYSTEM + "\n" + INITIAL_MEAL_USER

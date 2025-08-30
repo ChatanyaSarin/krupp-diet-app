@@ -1,59 +1,102 @@
-// diet-web/app/initial/page.tsx
-'use client';
-import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
-import { getUser } from '@/lib/session';
-import { useRouter } from 'next/navigation';
+"use client";
 
-export default function Initial() {
-  const r = useRouter(); const u = getUser()!;
-  const [meals, setMeals] = useState<any>({});
-  const [choice, setChoice] = useState<Record<string, boolean | null>>({});
-  const [busy, setBusy] = useState(false);
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { api } from "@/lib/api";
+import { readUsername } from "@/lib/user";
+import { MealCard } from "@/components/MealCard"; // ensure this import exists
 
+type MealMeta = {
+  long_name: string;
+  description?: string;
+  ingredients: Record<string, string>;
+  instructions: string;
+};
+
+export default function InitialPage() {
+  const router = useRouter();
+  const search = useSearchParams();
+
+  // Prevent hydration mismatches: don't read URL/localStorage until mounted
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const username = useMemo(
+    () => (mounted ? readUsername(search) : ""),
+    [mounted, search]
+  );
+
+  const [meals, setMeals] = useState<Record<string, MealMeta>>({});
+  const [decisions, setDecisions] = useState<Record<string, boolean>>({});
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch initial suggestions once we know the username on the client
   useEffect(() => {
-    api.initialMeals(u).then(m => {
-      setMeals(m);
-      const init: Record<string, boolean|null> = {};
-      Object.keys(m).forEach(k => init[k] = null);
-      setChoice(init);
-    });
-  }, [u]);
-
-  const slugs = Object.keys(meals);
-  const likesCount = Object.values(choice).filter(v => v === true).length;
-
-  async function submit() {
-    setBusy(true);
-    for (const slug of slugs) {
-      const like = choice[slug] === true;
-      await api.feedback(u, slug, like, true);
+    if (!mounted) return;
+    if (!username) {
+      router.replace("/login");
+      return;
     }
-    r.push('/biomarkers');
-  }
+    setLoading(true);
+    setErr(null);
+    api
+      .initialMeals(username)
+      .then((data) => setMeals(data || {}))
+      .catch((e) => setErr(String(e)))
+      .finally(() => setLoading(false));
+  }, [mounted, username, router]);
+
+  if (!mounted) return null; // first paint matches on server/client
+
+  if (!username) return null; // redirecting
+
+  if (err) return <div className="p-6 text-red-600">Error: {err}</div>;
+
+  if (loading) return <div className="p-6">Loading…</div>;
+
+  const keys = Object.keys(meals);
+  const allDecided = keys.length > 0 && keys.every((k) => k in decisions);
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
-      <h1 className="text-xl font-semibold mb-3">Pick the meals you like (at least one)</h1>
-      <div className="grid md:grid-cols-2 gap-4">
-        {slugs.map(slug => {
-          const liked = choice[slug];
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-white">Pick your favorites</h1>
+        <p className="text-slate-200">
+          Make a call on{" "}
+          <span className="text-uc-gold font-semibold">every meal</span> to
+          continue.
+        </p>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {keys.map((k) => {
+          const m = meals[k];
           return (
-            <div key={slug} className="border rounded-lg p-4 space-y-2">
-              <div className="font-medium">{meals[slug].long_name}</div>
-              <div className="text-sm text-gray-600">… ingredients & steps preview …</div>
-              <div className="flex gap-2">
-                <button className={`flex-1 border rounded px-3 py-2 ${liked===true?'bg-green-600 text-white':''}`} onClick={()=>setChoice({...choice, [slug]: true})}>Like</button>
-                <button className={`flex-1 border rounded px-3 py-2 ${liked===false?'bg-red-600 text-white':''}`} onClick={()=>setChoice({...choice, [slug]: false})}>Dislike</button>
-              </div>
-            </div>
+            <MealCard
+              key={k}
+              title={m.long_name}
+              description={m.description || ""}
+              onChoose={async (liked) => {
+                // record locally
+                setDecisions((d) => ({ ...d, [k]: liked }));
+                // send to backend (uses correct signature)
+                await api.feedback(username, k, liked, /* initial */ true);
+              }}
+            />
           );
         })}
       </div>
-      <div className="mt-4">
-        <button disabled={likesCount===0 || busy} onClick={submit}
-          className="bg-emerald-600 text-white rounded px-4 py-2 disabled:opacity-50">
-          {busy ? 'Saving…' : `Submit (${likesCount} liked)`}
+
+      <div className="mt-8 flex justify-end">
+        <button
+          className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={!allDecided}
+          onClick={() =>
+            router.push(`/biomarkers?username=${encodeURIComponent(username)}`)
+          }
+        >
+          Continue
         </button>
       </div>
     </div>

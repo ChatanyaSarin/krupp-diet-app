@@ -1,26 +1,50 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Put your reusable component classes in @layer components */
+@layer components {
+  .card {
+    @apply rounded-2xl bg-uc-blue/60 border border-white/10 shadow-brand;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs bg-uc-gold text-uc-blue;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .shadow-brand {
+    --tw-shadow: 0 12px 40px rgba(24,43,73,.28);
+    --tw-shadow-colored: 0 12px 40px var(--tw-shadow-color);
+    box-shadow: var(--tw-ring-offset-shadow,0 0 #0000), var(--tw-ring-shadow,0 0 #0000), var(--tw-shadow);
+  }
+  .glass {
+    @apply bg-white/5 backdrop-blur-md border border-white/10;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2
+           bg-uc-gold text-uc-blue font-semibold shadow-brand
+           hover:brightness-110 active:brightness-95 transition;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full bg-uc-blue/70 text-uc-gold text-xs px-2 py-1 border border-white/10;
+  }
+}
+
+@layer base {
+  /* Make typed text black in all form fields */
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="number"],
+  textarea,
+  select {
+    @apply text-black;
+  }
+
+  /* Placeholder can stay a softer gray if you want */
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-slate-500;
+  }
 }

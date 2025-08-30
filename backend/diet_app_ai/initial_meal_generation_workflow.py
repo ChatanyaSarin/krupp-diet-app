@@ -35,31 +35,20 @@ def get_llm(
         temperature=temperature,
     )
 
+def generate_initial_meals(user_profile: dict) -> dict:
+    """
+    user_profile = {
+      "height": int, "weight": int,
+      "dietary_restrictions": [..], "goals": [..]
+    }
+    Returns: dict keyed by slug -> {
+      long_name, description, ingredients:{..}, instructions
+    }
+    """
 
-_PROMPT = PromptTemplate(
-    template=INITIAL_MEAL_GENERATION_PROMPT,
-    input_variables=["height", "weight", "goals", "dietary_rules"],
-)
-
-
-def generate_initial_meals(user_profile: Dict[str, Any]) -> Dict[str, Any]:
     parser = JsonOutputParser()
-    print(user_profile)  # Debugging: print the formatted prompt
-    chain = LLMChain(llm=get_llm(), 
-                     prompt=_PROMPT,
-                     output_parser = parser,
-                     verbose = True # For testing
-                    )
+    prompt = PromptTemplate.from_template(INITIAL_MEAL_GENERATION_PROMPT)
+    chain = LLMChain(llm=get_llm(), prompt=prompt, verbose=True, output_parser = parser)
+
     return chain.invoke(user_profile)["text"]
 
-
-
-# ── quick CLI test ──────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    demo = dict(height="175 cm", weight="70 kg",
-                goals="maintain energy for marathon training",
-                dietary_rules="vegetarian, gluten-free")
-    
-    json_meals = generate_initial_meals(demo)
-    print(json.dumps(json_meals, indent = 4))
-    print(json_meals.keys())
