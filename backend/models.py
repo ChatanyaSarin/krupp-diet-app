@@ -27,7 +27,6 @@ class UserPreferences:
     Username: str
     Height: int
     Weight: int
-    Goals: str
     DietaryRestrictions: str
     CreatedAt: str = field(default_factory=now_ts)
 
@@ -36,7 +35,6 @@ class UserPreferences:
         "Username",
         "Height",
         "Weight",
-        "Goals",
         "DietaryRestrictions",
         "CreatedAt",
     ]
@@ -46,7 +44,6 @@ class UserPreferences:
             self.Username,
             int(self.Height),
             int(self.Weight),
-            self.Goals,
             self.DietaryRestrictions,
             self.CreatedAt,
         ]
@@ -108,20 +105,26 @@ class UserMealPreference:
 class UserBiomarker:
     Date: str
     Username: str
-    Biomarker1: int
-    Biomarker2: int
-    Biomarker3: int
+    Mood: int
+    Energy: int
+    Fullness: int
 
     # MUST match header row in 'UserBiomarker'
-    HEADER = ["Date", "Username", "BIOMARKER 1", "BIOMARKER 2", "BIOMARKER 3"]
+    HEADER = [
+        "Date", 
+        "Username", 
+        "Mood", 
+        "Energy", 
+        "Fullness"
+    ]
 
     def to_row(self) -> List[Any]:
         return [
             self.Date,
             self.Username,
-            int(self.Biomarker1),
-            int(self.Biomarker2),
-            int(self.Biomarker3),
+            int(self.Mood),
+            int(self.Energy),
+            int(self.Fullness),
         ]
 
     def save(self) -> None:

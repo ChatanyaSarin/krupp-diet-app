@@ -6,20 +6,20 @@ For each meal include:
 - description: one-sentence appetizing blurb
 - ingredients: object of {{item: amount_string}}
 - instructions: single string with numbered or newline steps
+- RESPECT USER DIETARY RESTRICTIONS (e.g., vegetarian means NO MEAT/SEAFOOD).
 Return ONLY valid JSON, no markdown fences, no commentary."""
 
 INITIAL_MEAL_USER = """User profile:
 - Height (in): {height}
 - Weight (lb): {weight}
-- Goals (comma-separated): {goals}
 - Dietary restrictions (comma-separated): {dietary_restrictions}
 
 Output format example:
 {{
   "slug1": {{
-    "long_name": "Grilled Chicken Sandwich with Chimichurri",
-    "description": "A zesty, protein-forward sandwich with bright herbs.",
-    "ingredients": {{ "chicken breast": "1", "roll": "1", "chimichurri": "2 tbsp" }},
+    "long_name": "...",
+    "description": "...,
+    "ingredients": {{ "ingredient": "amount", ... }},
     "instructions": "1) ...\\n2) ..."
   }},
   ...

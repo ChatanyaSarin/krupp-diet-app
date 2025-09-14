@@ -7,16 +7,18 @@ import { useRouter } from 'next/navigation';
 
 export default function Biomarkers() {
   const r = useRouter(); const u = getUser()!;
-  const [b1,setB1]=useState('5'),[b2,setB2]=useState('5'),[b3,setB3]=useState('5');
+  const [b1,setB1]=useState(''),[b2,setB2]=useState(''),[b3,setB3]=useState('');
   const [busy,setBusy]=useState(false);
   async function submit(){
     setBusy(true);
     await api.biomarkers(u, +b1, +b2, +b3);
+    console.log('Submitted biomarkers', {b1,b2,b3});
     r.push('/daily');
   }
   return (<div className="max-w-md mx-auto p-6 space-y-3">
     <h1 className="text-xl font-semibold">How are you today?</h1>
-    {[['Biomarker 1',b1,setB1],['Biomarker 2',b2,setB2],['Biomarker 3',b3,setB3]].map(([label,val,setter]:any)=>(
+    <h2 className="text-sm text-black-700">On a scale of 1 to 10, 10 being best, how would you rate your current...</h2>
+    {[['Mood',b1,setB1],['Energy',b2,setB2],['Fullness (Satiety)',b3,setB3]].map(([label,val,setter]:any)=>(
       <input key={label} className="w-full border rounded text-black px-3 py-2" placeholder={`${label} (0–10)`}
         value={val} onChange={(e)=>setter(e.target.value)} />
     ))}

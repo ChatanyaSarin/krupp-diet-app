@@ -155,7 +155,7 @@ def meals_initial():
         return {"error": "Username is required"}, 400
 
     # ----- read UserPreferences safely -----
-    vals = get_values("UserPreferences")  # [['Username','Height','Weight','Goals','DietaryRestrictions', ...], [..], ...]
+    vals = get_values("UserPreferences")  # [['Username','Height','Weight','DietaryRestrictions', ...], [..], ...]
     if not vals:
         return jsonify({"error": "UserPreferences tab is empty or missing"}), 400
 
@@ -165,11 +165,11 @@ def meals_initial():
         except ValueError: return None
 
     u_i = idx("Username"); h_i = idx("Height"); w_i = idx("Weight")
-    g_i = idx("Goals"); dr_i = idx("DietaryRestrictions")
+    dr_i = idx("DietaryRestrictions")
 
-    if None in (u_i, h_i, w_i, g_i, dr_i):
+    if None in (u_i, h_i, w_i, dr_i):
         return jsonify({"error": f"UserPreferences header must include "
-                                 f"[Username, Height, Weight, Goals, DietaryRestrictions]. "
+                                 f"[Username, Height, Weight, DietaryRestrictions, CreatedAt]. "
                                  f"Found: {header}"}), 400
 
     row = None
@@ -188,7 +188,6 @@ def meals_initial():
     except (ValueError, IndexError, TypeError):
         return jsonify({"error": "Height/Weight must be integers in UserPreferences"}), 400
 
-    goals = [s.strip() for s in (row[g_i] if g_i is not None and len(row) > g_i else "").split(",") if s.strip()]
     restrictions = [s.strip() for s in (row[dr_i] if dr_i is not None and len(row) > dr_i else "").split(",") if s.strip()]
 
     # ----- call LLM -----
@@ -197,7 +196,6 @@ def meals_initial():
             "height": height,
             "weight": weight,
             "dietary_restrictions": restrictions,
-            "goals": goals,
         }
     )
 
@@ -243,11 +241,11 @@ def biomarkers():
         raise KeyError(keys[0])
 
     try:
-        b1 = _geti("BIOMARKER 1", "Biomarker1", "b1")
-        b2 = _geti("BIOMARKER 2", "Biomarker2", "b2")
-        b3 = _geti("BIOMARKER 3", "Biomarker3", "b3")
+        b1 = _geti("Mood", "Mood", "b1")
+        b2 = _geti("Energy", "Energy", "b2")
+        b3 = _geti("Fullness", "Fullness", "b3")
     except (KeyError, ValueError):
-        return {"error": "Biomarkers must be provided as integers"}, 400
+        return {"error": f"Biomarkers must be provided as integers, {data}"}, 400
 
     # Range check (0–10)
     for v in (b1, b2, b3):
@@ -258,9 +256,9 @@ def biomarkers():
     row = UserBiomarker(
         Date=TODAY(),
         Username=username,
-        Biomarker1=b1,
-        Biomarker2=b2,
-        Biomarker3=b3,
+        Mood=b1,
+        Energy=b2,
+        Fullness=b3,
     )
     row.save()
     return {"ok": True}, 201
@@ -285,6 +283,158 @@ def meal_feedback():
     ])
     return {"status": "ok"}, 201
 
+@bp.post("/meals/ingredients")
+def meals_ingredients():
+    """
+    Body: {
+      "Username": "alice",
+      "MealCodes": ["burrito-bowl", "tofu-scramble", "pasta-primavera"]
+    }
+
+    Returns grouped details for the latest entry per code:
+    {
+      "breakfast": {
+        "tofu-scramble": {
+          "description": "...",
+          "ingredients": { "tofu": "200g", "spinach": "1 cup", ... },
+          "steps": ["...", "..."]  # optional
+        }
+      },
+      "lunch": { ... },
+      "dinner": { ... }
+    }
+    """
+    data = request.get_json(silent=True) or {}
+    username = (data.get("Username") or data.get("username") or "").strip()
+    meal_codes = data.get("MealCodes") or []
+    if not username:
+        return {"error": "Username is required"}, 400
+    if not isinstance(meal_codes, list) or not meal_codes:
+        return {"error": "MealCodes must be a non-empty list"}, 400
+
+    from datetime import datetime
+    def parse_date(s):
+        try: return datetime.strptime(s, "%Y-%m-%d").date()
+        except Exception: return None
+
+    # ---------- INGREDIENTS ----------
+    rows = get_values("MealIngredients")
+    out = {"breakfast": {}, "lunch": {}, "dinner": {}}
+    if not rows:
+        return jsonify(out), 200
+
+    hdr = rows[0]
+    def col(name):
+        try: return hdr.index(name)
+        except ValueError: return None
+
+    d_i  = col("Date")
+    u_i  = col("Username")
+    t_i  = col("MealType")
+    c_i  = col("MealCode")
+    desc_i = col("Description")
+    ing_i  = col("Ingredients")
+    amt_i  = col("Amount")
+
+    target_codes = set(map(str, meal_codes))
+
+    # Track latest date per code
+    latest_date_per_code = {}  # code -> date
+    # Aggregate by (code, date)
+    by_code_date = {}  # (code, date_iso) -> { meal_type, description, ingredients{} }
+
+    for r in rows[1:]:
+        if any(x is None for x in (d_i,u_i,t_i,c_i,ing_i,amt_i,desc_i)): 
+            continue
+        if len(r) <= max(d_i,u_i,t_i,c_i,ing_i,amt_i,desc_i): 
+            continue
+        if r[u_i] != username: 
+            continue
+        code = r[c_i]
+        if code not in target_codes: 
+            continue
+        d = parse_date(r[d_i])
+        if not d: 
+            continue
+
+        # keep only latest date per code
+        if (code not in latest_date_per_code) or (d > latest_date_per_code[code]):
+            latest_date_per_code[code] = d
+
+        key = (code, d.isoformat())
+        if key not in by_code_date:
+            by_code_date[key] = {
+                "meal_type": (r[t_i] or "").strip().lower(),
+                "description": (r[desc_i] or "").strip(),
+                "ingredients": {}
+            }
+        ing = str(r[ing_i]).strip()
+        amt = str(r[amt_i]).strip()
+        if ing:
+            by_code_date[key]["ingredients"][ing] = amt
+
+    # ---------- STEPS (optional but recommended) ----------
+    steps_rows = get_values("MealSteps")
+    steps_by_key = {}  # (code, date_iso) -> [steps...]
+
+    if steps_rows:
+        sh = steps_rows[0]
+        def scol(name):
+            try: return sh.index(name)
+            except ValueError: return None
+
+        sd_i = scol("Date")
+        su_i = scol("Username")
+        st_i = scol("MealType")
+        sc_i = scol("MealCode")
+        step_i = scol("Step")
+        instr_i = scol("Instruction")
+
+        for r in steps_rows[1:]:
+            if any(x is None for x in (sd_i, su_i, st_i, sc_i, step_i, instr_i)):
+                continue
+            if len(r) <= max(sd_i, su_i, st_i, sc_i, step_i, instr_i):
+                continue
+            if r[su_i] != username:
+                continue
+            code = r[sc_i]
+            if code not in target_codes:
+                continue
+            d = parse_date(r[sd_i])
+            if not d:
+                continue
+
+            # we only care about steps on the latest date for that code
+            if code not in latest_date_per_code or d != latest_date_per_code[code]:
+                continue
+
+            key = (code, d.isoformat())
+            steps_by_key.setdefault(key, [])
+            txt = str(r[instr_i]).strip()
+            if txt:
+                steps_by_key[key].append((int(r[step_i]) if str(r[step_i]).isdigit() else 9999, txt))
+
+    # ---------- Build final output ----------
+    for code, latest in latest_date_per_code.items():
+        key = (code, latest.isoformat())
+        agg = by_code_date.get(key)
+        if not agg:
+            continue
+        sec = agg["meal_type"] if agg["meal_type"] in out else "lunch"
+        item = {
+            "description": agg["description"],
+            "ingredients": agg["ingredients"],
+        }
+        # attach steps if we found any
+        if key in steps_by_key:
+            # sort by step number if present
+            steps_sorted = [txt for _, txt in sorted(steps_by_key[key], key=lambda x: x[0])]
+            item["steps"] = steps_sorted
+        out[sec][code] = item
+
+    return jsonify(out), 200
+
+
 def _latest_summaries(username: str) -> tuple[str, str]:
     """Return (biomarker_summary, taste_profile). Empty strings if none."""
     vals = get_values("UserSummarization")
@@ -305,17 +455,6 @@ def _latest_summaries(username: str) -> tuple[str, str]:
     biomarker_summary = last[bs_i] if len(last) > bs_i else ""
     taste_profile = last[ps_i] if len(last) > ps_i else ""
     return biomarker_summary, taste_profile
-
-def _user_goals(username: str) -> str:
-    vals = get_values("UserPreferences")
-    if not vals: return ""
-    hdr = vals[0]
-    try:
-        u_i = hdr.index("Username"); g_i = hdr.index("Goals")
-    except ValueError:
-        return ""
-    row = next((r for r in vals[1:] if len(r)>u_i and r[u_i]==username), None)
-    return (row[g_i] if row and len(row)>g_i else "") or ""
 
 TODAY = lambda: dt.datetime.now().strftime("%Y-%m-%d")
 
@@ -370,7 +509,6 @@ def meals_daily():
             append_row("UserSummarization", [TODAY(), username, taste_profile, biomarker_summary, "llama", 0.7])
 
     # 3) Profile fields
-    goals        = _user_goals(username) or "General health and steady energy."
     restrictions = _user_restrictions(username) or []
 
     # 4) Build LLM context with ALL keys your prompt expects
@@ -378,8 +516,6 @@ def meals_daily():
         "biomarker_summary":    biomarker_summary or "No recent biomarker data.",
         "taste_profile":        taste_profile or "No strong preferences recorded.",
         "taste_summary":        taste_profile or "No strong preferences recorded.",
-        "goals":                goals,
-        "user_goals":           goals,
         "dietary_restrictions": ", ".join(restrictions),
     }
 

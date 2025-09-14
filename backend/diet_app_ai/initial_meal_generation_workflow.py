@@ -6,7 +6,6 @@ The caller passes:
     user_profile = {
         "height": "180 cm",
         "weight": "75 kg",
-        "goals":  "cut",
         "dietary_rules": "no pork, lactose-free"
     }
 The function returns a Python dict parsed from the JSON produced by the LLM.
@@ -45,7 +44,7 @@ def generate_initial_meals(user_profile: dict) -> dict:
       long_name, description, ingredients:{..}, instructions
     }
     """
-
+    user_profile["dietary_restrictions"] = ", ".join(user_profile.get("dietary_restrictions", []))
     parser = JsonOutputParser()
     prompt = PromptTemplate.from_template(INITIAL_MEAL_GENERATION_PROMPT)
     chain = LLMChain(llm=get_llm(), prompt=prompt, verbose=True, output_parser = parser)

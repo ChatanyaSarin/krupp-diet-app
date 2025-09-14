@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import clsx from "clsx";
+import { pretty } from "@/lib/pretty";
+
 
 export function MealCard({
   title,
@@ -20,7 +22,7 @@ export function MealCard({
       choice === false && "ring-2 ring-red-500/60"
     )}>
       <header className="flex items-start justify-between gap-3">
-        <h3 className="font-semibold text-white">{title}</h3>
+        <h3 className="font-semibold text-white">{pretty(title)}</h3>
         <span className="text-xs px-2 py-1 rounded-md bg-uc-gold text-uc-blue">
           Suggested
         </span>

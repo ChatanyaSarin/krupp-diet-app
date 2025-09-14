@@ -11,14 +11,13 @@ export default function Setup() {
   const [ft, setFt] = useState('5');
   const [inch, setInch] = useState('10');
   const [wt, setWt] = useState('160');
-  const [goals, setGoals] = useState('bulk, energy');
   const [restr, setRestr] = useState('vegetarian');
   const [busy, setBusy] = useState(false);
 
   async function submit() {
     setBusy(true);
     const height = parseInt(ft) * 12 + parseInt(inch);
-    await api.setupUser({ Username: u, Height: height, Weight: parseInt(wt), Goals: goals, DietaryRestrictions: restr });
+    await api.setupUser({ Username: u, Height: height, Weight: parseInt(wt), DietaryRestrictions: restr });
     r.push('/initial');
   }
 
@@ -30,7 +29,6 @@ export default function Setup() {
         <input className="border rounded text-black px-3 py-2" placeholder="Inches" value={inch} onChange={e=>setInch(e.target.value)} />
       </div>
       <input className="border rounded text-black px-3 py-2 w-full" placeholder="Weight (lbs)" value={wt} onChange={e=>setWt(e.target.value)} />
-      <input className="border rounded text-black px-3 py-2 w-full" placeholder="Goals" value={goals} onChange={e=>setGoals(e.target.value)} />
       <input className="border rounded text-black px-3 py-2 w-full" placeholder="Dietary restrictions" value={restr} onChange={e=>setRestr(e.target.value)} />
       <button className="bg-emerald-600 text-white rounded px-3 py-2 disabled:opacity-50" disabled={busy} onClick={submit}>
         {busy ? '...' : 'Save & continue'}

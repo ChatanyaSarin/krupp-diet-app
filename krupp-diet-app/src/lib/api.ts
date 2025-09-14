@@ -39,6 +39,21 @@ async function handle(res: Response) {
   return res.json();
 }
 
+export type OneMealIngredients = {
+  description: string;
+  ingredients: Record<string, string>;
+  steps?: string[] | string; // backend may send an array or a single string
+};
+
+export type IngredientsSection = Record<string, OneMealIngredients>;
+
+export type IngredientsResponse = {
+  breakfast: IngredientsSection;
+  lunch: IngredientsSection;
+  dinner: IngredientsSection;
+};
+
+
 export const api = {
   login: async (usernameInput: any, passwordInput: any) => {
     // Defensive coercion in case a form object slips in
@@ -113,7 +128,7 @@ export const api = {
   },
 
   setupUser(payload: {
-    Username: string; Height: number; Weight: number; Goals: string; DietaryRestrictions: string;
+    Username: string; Height: number; Weight: number; DietaryRestrictions: string;
   }) {
     return http<{ status: 'ok' }>('/setup_user', {
       method: 'POST',
@@ -155,26 +170,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         Username: username,
-        "BIOMARKER 1": b1,
-        "BIOMARKER 2": b2,
-        "BIOMARKER 3": b3,
-      }),
-    }).then(async (res) => {
-      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-      return res.json();
-    });
-  },
-
-  // If you already have this, keep it too:
-  sendBiomarkers(username: string, b1: number, b2: number, b3: number) {
-    return fetch(`${API_BASE}/biomarkers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        Username: username,
-        "BIOMARKER 1": b1,
-        "BIOMARKER 2": b2,
-        "BIOMARKER 3": b3,
+        "Mood": b1,
+        "Energy": b2,
+        "Fullness": b3,
       }),
     }).then(async (res) => {
       if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
@@ -194,5 +192,20 @@ export const api = {
       `/meals/daily?username=${encodeURIComponent(username)}`,
       { method: 'POST', body: JSON.stringify({ Username: username }) }
     );
-  }
+  },
+
+  chosenIngredients(username: string, mealCodes: string[]) {
+    return http<Record<"breakfast"|"lunch"|"dinner", Record<string, {
+      description?: string;
+      ingredients: Record<string, string>;
+      // steps is optional — we render it if present
+      steps?: string[] | string;
+    }>>>('/meals/ingredients', {
+      method: 'POST',
+      body: JSON.stringify({
+        Username: username,
+        MealCodes: mealCodes,
+      }),
+    });
+  },
 }

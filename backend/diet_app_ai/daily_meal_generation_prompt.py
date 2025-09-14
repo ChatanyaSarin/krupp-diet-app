@@ -21,38 +21,24 @@ Hard requirements:
 #   biomarker_summary, taste_profile, taste_summary, goals, user_goals, dietary_restrictions
 DAILY_USER = """Context:
 - Biomarker summary: {biomarker_summary}
-- Taste preferences (profile/summary): {taste_profile} {taste_summary}
-- User goals: {goals} {user_goals}
+- Taste preferences (profile/summary): {taste_summary}
 - Dietary restrictions: {dietary_restrictions}
 
 Output JSON (example shape):
+Output format example:
 {{
   "breakfast": {{
     "slug1": {{
-      "long_name": "…",
-      "description": "…",
-      "ingredients": {{ "…": "…", "…": "…" }},
-      "instructions": "1) …\\n2) …"
+      "long_name": "...",
+      "description": "...,
+      "ingredients": {{ "ingredient": "amount", ... }},
+      "instructions": "1) ...\\n2) ..."
     }},
-    "slug2": {{ "long_name": "…", "description": "…", "ingredients": {{…}}, "instructions": "…" }},
-    "slug3": {{ … }},
-    "slug4": {{ … }},
-    "slug5": {{ … }}
+    ...
+    "slug5": {{ ... }}
   }},
-  "lunch": {{
-    "slug1": {{ "long_name": "…", "description": "…", "ingredients": {{…}}, "instructions": "…" }},
-    "slug2": {{ … }},
-    "slug3": {{ … }},
-    "slug4": {{ … }},
-    "slug5": {{ … }}
-  }},
-  "dinner": {{
-    "slug1": {{ "long_name": "…", "description": "…", "ingredients": {{…}}, "instructions": "…" }},
-    "slug2": {{ … }},
-    "slug3": {{ … }},
-    "slug4": {{ … }},
-    "slug5": {{ … }}
-  }}
+  "lunch": {{ ... }},
+  "dinner": {{ ... }}
 }}"""
 
 DAILY_MEAL_GENERATION_PROMPT = DAILY_SYSTEM + "\n" + DAILY_USER

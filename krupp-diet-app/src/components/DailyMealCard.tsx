@@ -1,5 +1,6 @@
 "use client";
 import clsx from "clsx";
+import { pretty } from "@/lib/pretty";
 
 export function DailyMealCard({
   slug,
@@ -34,7 +35,7 @@ export function DailyMealCard({
           aria-hidden
         />
         <div>
-          <div className="font-semibold">{title}</div>
+          <div className="font-semibold">{pretty(title)}</div>
           {description ? <p className="text-sm text-black-600 mt-1">{description}</p> : null}
         </div>
       </div>

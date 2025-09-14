@@ -62,6 +62,7 @@ export default function DailyPage() {
   async function submit() {
     if (!username || !data) return;
     const tasks: Promise<any>[] = [];
+
     (["breakfast", "lunch", "dinner"] as Section[]).forEach((sec) => {
       const chosen = picks[sec]!;
       const items = Object.keys(data[sec] ?? {});
@@ -69,8 +70,15 @@ export default function DailyPage() {
         tasks.push(api.feedback(username, slug, slug === chosen, /* initial */ false));
       });
     });
+
     await Promise.all(tasks);
-    router.push("/gate?done=daily");
+
+    // NEW: send the chosen slugs to the ingredients page
+    router.push(
+  `/ingredients?b=${encodeURIComponent(picks.breakfast!)}&l=${encodeURIComponent(picks.lunch!)}&d=${encodeURIComponent(picks.dinner!)}`
+  );
+
+
   }
 
   // ---------- Render (keep first paint stable) ----------
