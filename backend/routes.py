@@ -514,9 +514,8 @@ def meals_daily():
     # 4) Build LLM context with ALL keys your prompt expects
     payload_context = {
         "biomarker_summary":    biomarker_summary or "No recent biomarker data.",
-        "taste_profile":        taste_profile or "No strong preferences recorded.",
         "taste_summary":        taste_profile or "No strong preferences recorded.",
-        "dietary_restrictions": ", ".join(restrictions),
+        "dietary_restrictions": restrictions,
     }
 
     # 5) Generate meals

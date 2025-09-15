@@ -1,6 +1,6 @@
 # initial_meal_generation_prompts.py
 INITIAL_MEAL_SYSTEM = """You are a diet planning assistant. Generate 10 diverse, realistic meals as JSON only.
-Each top-level key is a short slug (e.g., "chicken-sandwich").
+Each top-level key is a short, hyphen-seperated slug.
 For each meal include:
 - long_name: longer descriptive title
 - description: one-sentence appetizing blurb

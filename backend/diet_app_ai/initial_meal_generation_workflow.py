@@ -16,7 +16,7 @@ import json
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_community.chat_models import ChatOpenAI
-from diet_app_ai.initial_meal_generation_prompt import INITIAL_MEAL_GENERATION_PROMPT
+from initial_meal_generation_prompt import INITIAL_MEAL_GENERATION_PROMPT
 from langchain_core.output_parsers.json import JsonOutputParser
 
 GENAI_STUDIO_API_KEY = "sk-e7245ee0e151441f90bf24714fca6905" # Don't share
@@ -34,20 +34,38 @@ def get_llm(
         temperature=temperature,
     )
 
+def custom_parser (json_string):
+    try:
+        return json.loads(json_string)
+    except json.JSONDecodeError as e:
+        first_brace = json_string.find('{')
+        last_brace = json_string.rfind('}')
+        if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
+            trimmed_string = json_string[first_brace:last_brace + 1]
+            try:
+                return json.loads(trimmed_string)
+            except json.JSONDecodeError:
+                print(json_string)
+                raise e
+        else:
+            print(json_string)
+            raise e
+
 def generate_initial_meals(user_profile: dict) -> dict:
     """
     user_profile = {
       "height": int, "weight": int,
-      "dietary_restrictions": [..], "goals": [..]
+      "dietary_restrictions": [..]
     }
     Returns: dict keyed by slug -> {
       long_name, description, ingredients:{..}, instructions
     }
     """
-    user_profile["dietary_restrictions"] = ", ".join(user_profile.get("dietary_restrictions", []))
+    updated_user_profile = user_profile.copy()
+    updated_user_profile["dietary_restrictions"] = ", ".join(updated_user_profile.get("dietary_restrictions", []))
+
     parser = JsonOutputParser()
     prompt = PromptTemplate.from_template(INITIAL_MEAL_GENERATION_PROMPT)
-    chain = LLMChain(llm=get_llm(), prompt=prompt, verbose=True, output_parser = parser)
+    chain = LLMChain(llm=get_llm(), prompt=prompt, verbose=True)
 
-    return chain.invoke(user_profile)["text"]
-
+    return custom_parser(chain.invoke(updated_user_profile)["text"])

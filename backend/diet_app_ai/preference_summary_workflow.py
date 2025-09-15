@@ -6,8 +6,8 @@ from typing import Dict
 from langchain import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain.llms import LlamaCpp
-from diet_app_ai.preference_summary_prompt import PREFERENCE_SUMMARIZATION_PROMPT
-from diet_app_ai.initial_meal_generation_workflow import get_llm
+from preference_summary_prompt import PREFERENCE_SUMMARIZATION_PROMPT
+from initial_meal_generation_workflow import get_llm
 
 _PROMPT = PromptTemplate(
     template=PREFERENCE_SUMMARIZATION_PROMPT,

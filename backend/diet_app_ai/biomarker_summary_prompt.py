@@ -10,7 +10,7 @@ Variables
 Output
 ------
 A short evidence-style narrative linking ingredients → possible biomarker effects.
-Keep it ≤150 words.
+Keep it ≤150 words. 
 """
 BIOMARKER_SUMMARIZATION_PROMPT = """\
 You are an AI nutrition analyst relating meals to biomarker feedback.
@@ -30,5 +30,5 @@ Write ≤150 words summarizing plausible relationships between recurring
 ingredients/nutrients and the user’s biomarkers.  Use hedging language
 ("may", "could") rather than strong causal claims.  No citations yet.
 
-Return ONLY the output text. DO NOT include any other text.
+Return ONLY the output text. DO NOT include any other text. Avoid using pronouns - use "they" instead.
 """

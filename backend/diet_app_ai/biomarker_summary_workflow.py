@@ -5,8 +5,8 @@ Function: `update_biomarker_summary(payload: dict) -> str`
 from typing import Dict
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from diet_app_ai.biomarker_summary_prompt import BIOMARKER_SUMMARIZATION_PROMPT
-from diet_app_ai.initial_meal_generation_workflow import get_llm
+from biomarker_summary_prompt import BIOMARKER_SUMMARIZATION_PROMPT
+from initial_meal_generation_workflow import get_llm
 import json
 
 _PROMPT = PromptTemplate(
@@ -20,6 +20,7 @@ _PROMPT = PromptTemplate(
 
 
 def update_biomarker_summary(payload: Dict[str, str]) -> str:
+
     chain = LLMChain(llm=get_llm(), prompt=_PROMPT)
     return chain.run(payload).strip()
 

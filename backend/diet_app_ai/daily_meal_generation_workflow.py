@@ -7,8 +7,8 @@ import json
 from langchain import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain.llms import LlamaCpp
-from diet_app_ai.daily_meal_generation_prompt import DAILY_MEAL_GENERATION_PROMPT
-from diet_app_ai.initial_meal_generation_workflow import get_llm  # reuse helper
+from daily_meal_generation_prompt import DAILY_MEAL_GENERATION_PROMPT
+from initial_meal_generation_workflow import get_llm  # reuse helper
 from langchain_core.output_parsers.json import JsonOutputParser
 
 
@@ -20,6 +20,9 @@ def generate_daily_meals(context: Dict[str, Any]) -> str:
     """Generate daily meals JSON using a prompt that expects both the new and legacy keys."""
     parser = JsonOutputParser()
 
+    context_copy = context.copy()
+    context_copy["dietary_restrictions"] = ", ".join(context_copy.get("dietary_restrictions", []))
+
     chain = LLMChain(llm=get_llm(), prompt=_PROMPT, verbose=True, output_parser = parser)
 
-    return chain.invoke(context)["text"]
+    return chain.invoke(context_copy)["text"]
