@@ -65,13 +65,7 @@ export const api = {
           usernameInput?.toString?.() ??
           "").toString().trim();
 
-    const password =
-      typeof passwordInput === "string"
-        ? passwordInput
-        : (passwordInput?.password ??
-          passwordInput?.value ??
-          passwordInput?.toString?.() ??
-          "").toString();
+    const password = "blank";
 
     const res = await fetch(u("/auth/login"), {
       method: "POST",

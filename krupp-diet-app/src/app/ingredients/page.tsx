@@ -142,13 +142,13 @@ export default function IngredientsPage() {
           {codes.length === 0 ? (
             <p className="text-slate-500">No {sec} dish selected.</p>
           ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(360px,1fr))]">
               {codes.map((code) => {
                 const item = data[sec]?.[code];
                 if (!item) return null;
                 const steps = normalizeSteps(item.steps);
                 return (
-                  <div key={code} className="card">
+                  <div key={code} className="card text-center">
                     <div className="card-header">
                       <h3 className="card-title">{pretty(code)}</h3>
                       {item.description && (
@@ -156,8 +156,8 @@ export default function IngredientsPage() {
                       )}
                     </div>
                     <div className="card-body">
-                      <h4 className="font-medium text-slate-900">Ingredients</h4>
-                      <ul className="mt-2 space-y-1 text-sm text-black-700">
+                      <h4 className="font-medium text-slate-900 text-left pl-3">Ingredients</h4>
+                      <ul className="mt-2 space-y-2 text-sm text-black-700 text-left pl-3">
                         {Object.entries(item.ingredients || {}).map(([ing, amt]) => (
                           <li key={ing}>
                             <span className="font-medium">{pretty(ing)}</span>: {String(amt)}
@@ -167,8 +167,8 @@ export default function IngredientsPage() {
 
                       {steps.length > 0 && (
                         <>
-                          <h4 className="mt-4 font-medium text-slate-900">Steps</h4>
-                          <ol className="mt-2 list-decimal list-inside space-y-1 text-sm text-black-700">
+                          <h4 className="mt-4 font-medium text-slate-900 text-left pl-3">Steps</h4>
+                          <ol className="mt-2 list-decimal list-inside space-y-1 text-sm text-black-700 text-left pl-3">
                             {steps.map((s, i) => <li key={i}>{s}</li>)}
                           </ol>
                         </>
@@ -191,7 +191,7 @@ export default function IngredientsPage() {
           <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {Object.entries(shopping).map(([name, amt]) => (
               <li key={name} className="rounded-xl border border-slate-200 bg-white/60 p-3 text-sm">
-                <span className="font-medium">{pretty(name)}</span>: {amt}
+                <span className="font-medium text-black">{pretty(name)}: {amt}</span>
               </li>
             ))}
           </ul>
